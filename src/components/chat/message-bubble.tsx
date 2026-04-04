@@ -1,4 +1,3 @@
-import { Card, CardContent } from '@/components/ui/card';
 import type { UIMessage } from 'ai';
 
 interface MessageBubbleProps {
@@ -10,27 +9,25 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-      <Card
-        className={`max-w-[80%] ${
-          isUser ? 'bg-primary text-primary-foreground' : ''
+      <div
+        className={`max-w-[80%] rounded-2xl p-3 ${
+          isUser
+            ? 'bg-white border border-[#e8e8e4] rounded-tr-sm'
+            : 'bg-[#f4f4f0] rounded-tl-sm'
         }`}
       >
-        <CardContent className="py-3">
-          <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-wider opacity-60">
-              {isUser ? 'You' : 'AI Analyst'}
-            </p>
-            <div className="text-sm whitespace-pre-wrap leading-relaxed">
-              {message.parts.map((part, i) => {
-                if (part.type === 'text') {
-                  return <span key={i}>{part.text}</span>;
-                }
-                return null;
-              })}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        <p className="text-[10px] font-medium uppercase tracking-wider text-[#b0b0ac] mb-1">
+          {isUser ? 'You' : 'AI Analyst'}
+        </p>
+        <div className="text-sm text-[#1a1a1a] whitespace-pre-wrap leading-relaxed">
+          {message.parts.map((part, i) => {
+            if (part.type === 'text') {
+              return <span key={i}>{part.text}</span>;
+            }
+            return null;
+          })}
+        </div>
+      </div>
     </div>
   );
 }
