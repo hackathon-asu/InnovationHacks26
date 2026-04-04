@@ -60,6 +60,7 @@ STAGE_LABELS = {
 async def upload_policy(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    provider: str = Query(None, description="LLM provider override: gemini or ollama"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -101,6 +102,10 @@ async def upload_policy(
     )
     db.add(policy)
     await db.commit()
+
+    # Override LLM provider for this run if specified
+    if provider and provider in ("gemini", "ollama", "groq"):
+        settings.llm_provider = provider
 
     # Launch pipeline in background — returns immediately to caller
     background_tasks.add_task(run_ingestion_pipeline, policy_id, dest_path)

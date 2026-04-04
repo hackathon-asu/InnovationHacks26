@@ -2,8 +2,11 @@ const FASTAPI = 'http://localhost:8000';
 
 export async function POST(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const provider = searchParams.get('provider');
     const formData = await request.formData();
-    const res = await fetch(`${FASTAPI}/api/v1/ingest/upload`, {
+    const qs = provider ? `?provider=${provider}` : '';
+    const res = await fetch(`${FASTAPI}/api/v1/ingest/upload${qs}`, {
       method: 'POST',
       body: formData,
     });

@@ -20,6 +20,7 @@ Also added vs initial version:
 import asyncio
 import json
 import re
+import time
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 
 import httpx
@@ -152,7 +153,7 @@ def _strip_json_fences(text: str) -> str:
     return text.strip()
 
 
-def _split_into_sections(text: str, max_chars: int = 120_000) -> list[str]:
+def _split_into_sections(text: str, max_chars: int = 40_000) -> list[str]:
     """
     For very long policies (10+ pages), split by section for parallel processing.
     Returns list of text sections. Each will be sent to Gemini independently.
@@ -186,7 +187,7 @@ def _split_into_sections(text: str, max_chars: int = 120_000) -> list[str]:
 
 
 def _is_retryable(exc: BaseException) -> bool:
-    return isinstance(exc, (json.JSONDecodeError, ValueError, ResourceExhausted, ServiceUnavailable))
+    return isinstance(exc, (json.JSONDecodeError, ValueError, ResourceExhausted, ServiceUnavailable, httpx.ReadTimeout, httpx.ConnectTimeout))
 
 
 @retry(
@@ -217,7 +218,7 @@ async def _extract_section(model, section_text: str, hint_block: str) -> dict:
 
 @retry(
     stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=15),
+    wait=wait_exponential(multiplier=2, min=5, max=30),
     retry=retry_if_exception(_is_retryable),
 )
 async def _extract_section_ollama(section_text: str, hint_block: str) -> dict:
@@ -225,7 +226,7 @@ async def _extract_section_ollama(section_text: str, hint_block: str) -> dict:
     prompt = f"{hint_block}\n\nPOLICY DOCUMENT SECTION:\n\n{section_text}"
 
     async with _llm_semaphore:
-        async with httpx.AsyncClient(timeout=180.0) as client:
+        async with httpx.AsyncClient(timeout=600.0) as client:
             resp = await client.post(
                 f"{settings.ollama_base_url}/api/chat",
                 json={
@@ -235,7 +236,7 @@ async def _extract_section_ollama(section_text: str, hint_block: str) -> dict:
                         {"role": "user", "content": prompt},
                     ],
                     "stream": False,
-                    "options": {"temperature": 0},
+                    "options": {"temperature": 0, "num_predict": 16384},
                 },
             )
             resp.raise_for_status()
@@ -246,6 +247,77 @@ async def _extract_section_ollama(section_text: str, hint_block: str) -> dict:
         return json.loads(raw_json)
     except json.JSONDecodeError as e:
         log.warning("Ollama JSON parse failed", error=str(e), snippet=raw_json[:300])
+        raise
+
+
+# ── Groq rate-limit tracker ──────────────────────────────────────────────────
+# Free tier: ~6000 tokens/min. We spend (limit - 500) per request, then sleep
+# until the minute window resets.
+_groq_window_start: float = 0.0
+_groq_tokens_used: int = 0
+
+
+async def _groq_rate_wait(requested_tokens: int):
+    """Sleep if we'd exceed the per-minute token budget."""
+    global _groq_window_start, _groq_tokens_used
+    now = time.monotonic()
+    budget = settings.groq_max_tokens_per_min - 500  # safety margin
+
+    # Reset window if >60s elapsed
+    if now - _groq_window_start >= 60:
+        _groq_window_start = now
+        _groq_tokens_used = 0
+
+    if _groq_tokens_used + requested_tokens > budget:
+        wait_secs = 60 - (now - _groq_window_start) + 1
+        if wait_secs > 0:
+            log.info("Groq rate limit — sleeping", wait=f"{wait_secs:.0f}s",
+                     used=_groq_tokens_used, budget=budget)
+            await asyncio.sleep(wait_secs)
+        _groq_window_start = time.monotonic()
+        _groq_tokens_used = 0
+
+
+@retry(
+    stop=stop_after_attempt(4),
+    wait=wait_exponential(multiplier=2, min=10, max=65),
+    retry=retry_if_exception(_is_retryable),
+)
+async def _extract_section_groq(section_text: str, hint_block: str) -> dict:
+    """Extract structured data via Groq API (OpenAI-compatible)."""
+    global _groq_tokens_used
+    prompt = f"{hint_block}\n\nPOLICY DOCUMENT SECTION:\n\n{section_text}"
+    max_tokens = settings.groq_max_tokens_per_min - 500
+
+    await _groq_rate_wait(max_tokens)
+
+    async with _llm_semaphore:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {settings.groq_api_key}"},
+                json={
+                    "model": settings.groq_model,
+                    "messages": [
+                        {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": 0,
+                    "max_tokens": max_tokens,
+                },
+            )
+            resp.raise_for_status()
+            body = resp.json()
+            content = body["choices"][0]["message"]["content"]
+            used = body.get("usage", {}).get("total_tokens", max_tokens)
+            _groq_tokens_used += used
+            log.info("Groq response", tokens_used=used, window_total=_groq_tokens_used)
+
+    raw_json = _strip_json_fences(content)
+    try:
+        return json.loads(raw_json)
+    except json.JSONDecodeError as e:
+        log.warning("Groq JSON parse failed", error=str(e), snippet=raw_json[:300])
         raise
 
 
@@ -298,6 +370,17 @@ async def extract_policy_structure(raw_text: str, nlp_result: MedNLPResult) -> P
             )
             valid = [r for r in section_results if isinstance(r, dict)]
             data = _merge_section_results(valid)
+    elif settings.llm_provider == "groq":
+        log.info("Sending to Groq", model=settings.groq_model, sections=len(sections), total_chars=len(raw_text))
+        # Groq is fast but rate-limited — process sections sequentially to respect token budget
+        section_results = []
+        for s in sections:
+            try:
+                result = await _extract_section_groq(s, hint_block)
+                section_results.append(result)
+            except Exception as e:
+                log.warning("Groq section failed", error=str(e))
+        data = _merge_section_results(section_results)
     else:
         model = genai.GenerativeModel(
             model_name=settings.gemini_model,
