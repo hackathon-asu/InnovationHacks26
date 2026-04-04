@@ -1,0 +1,36 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.9
+
+# Database
+sqlalchemy==2.0.35
+asyncpg==0.29.0
+alembic==1.13.2
+pgvector==0.3.2
+psycopg2-binary==2.9.9
+
+# Document parsing (replaces pypdf — Docling is IBM's framework with 97.9% table accuracy)
+# docling==2.5.0           # Optional: conflicts with older NLP stack on this setup
+# marker-pdf==1.3.5        # Optional OCR fallback for scanned PDFs
+pypdf==5.4.0               # Basic PDF fallback parser used by pdf_parser.py
+
+# Healthcare NLP
+# scispacy==0.5.4          # Optional: incompatible with docling's scipy requirement on this setup
+# spacy==3.7.4             # Optional: conflicts with docling's typer requirement on this setup
+
+# Download models at setup:
+#   python -m spacy download en_core_web_sm
+#   pip install https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_core_sci_lg-0.5.4.tar.gz
+
+# AI
+google-generativeai==0.8.3
+
+# Utils
+pydantic==2.9.2
+pydantic-settings==2.5.2
+tenacity==9.0.0
+httpx==0.27.2              # async HTTP for RxNorm API calls
+aiofiles==24.1.0
+python-dotenv==1.0.1
+structlog==24.4.0
+#difflib2==0.0.1            # Section-level text diffing
