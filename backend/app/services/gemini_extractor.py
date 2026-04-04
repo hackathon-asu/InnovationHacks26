@@ -215,13 +215,18 @@ async def _extract_section(model, section_text: str, hint_block: str) -> dict:
         raise
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=15),
+    retry=retry_if_exception(_is_retryable),
+)
 async def _extract_section_ollama(section_text: str, hint_block: str) -> dict:
     """Extract structured data from a single section of the policy (Ollama path)."""
     prompt = f"{hint_block}\n\nPOLICY DOCUMENT SECTION:\n\n{section_text}"
 
     async with _llm_semaphore:
         async with httpx.AsyncClient(timeout=180.0) as client:
-            response = await client.post(
+            resp = await client.post(
                 f"{settings.ollama_base_url}/api/chat",
                 json={
                     "model": settings.ollama_model,
@@ -233,9 +238,10 @@ async def _extract_section_ollama(section_text: str, hint_block: str) -> dict:
                     "options": {"temperature": 0},
                 },
             )
-            response.raise_for_status()
+            resp.raise_for_status()
+            content = resp.json()["message"]["content"]
 
-    raw_json = _strip_json_fences(response.json()["message"]["content"])
+    raw_json = _strip_json_fences(content)
     try:
         return json.loads(raw_json)
     except json.JSONDecodeError as e:

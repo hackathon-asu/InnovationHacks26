@@ -206,11 +206,11 @@ async def delete_policy(policy_id: uuid.UUID, db: AsyncSession = Depends(get_db)
     policy = result.scalar_one_or_none()
     if not policy:
         raise HTTPException(status_code=404, detail="Policy not found")
+    file_path = policy.original_file_path
     await db.delete(policy)
     await db.commit()
-    # Remove uploaded file if it still exists
     try:
-        Path(policy.original_file_path).unlink(missing_ok=True)
+        Path(file_path).unlink(missing_ok=True)
     except Exception:
         pass
 
@@ -225,11 +225,13 @@ async def delete_policies_by_status(
     policies = result.scalars().all()
     if not policies:
         return {"deleted": 0}
+    file_paths = [p.original_file_path for p in policies]
     for policy in policies:
         await db.delete(policy)
+    await db.commit()
+    for fp in file_paths:
         try:
-            Path(policy.original_file_path).unlink(missing_ok=True)
+            Path(fp).unlink(missing_ok=True)
         except Exception:
             pass
-    await db.commit()
-    return {"deleted": len(policies)}
+    return {"deleted": len(file_paths)}
