@@ -2,13 +2,13 @@
 
 import type { ComparisonEntry } from '@/lib/types/comparison';
 
-function coverageStyle(status: string | undefined) {
+function coverageBadge(status: string | undefined) {
   switch (status) {
-    case 'covered': return 'bg-emerald-100 text-emerald-700';
-    case 'not_covered': return 'bg-red-100 text-red-700';
-    case 'covered_with_criteria': return 'bg-amber-100 text-amber-700';
-    case 'experimental': return 'bg-purple-100 text-purple-700';
-    default: return 'bg-[#f0f0ec] text-[#8b8b8b]';
+    case 'covered': return 'border-[#91BFEB] bg-[#dceeff] text-[#15173F]';
+    case 'not_covered': return 'border-[#15173F] bg-[#15173F] text-white';
+    case 'covered_with_criteria': return 'border-amber-200 bg-amber-50 text-amber-800';
+    case 'experimental': return 'border-purple-200 bg-purple-50 text-purple-800';
+    default: return 'border-slate-200 bg-slate-50 text-slate-600';
   }
 }
 
@@ -16,100 +16,55 @@ function coverageLabel(status: string | undefined) {
   switch (status) {
     case 'covered': return 'Covered';
     case 'not_covered': return 'Not Covered';
-    case 'covered_with_criteria': return 'With Criteria';
+    case 'covered_with_criteria': return 'Conditional';
     case 'experimental': return 'Experimental';
-    case 'not_addressed': return 'Not Addressed';
+    case 'not_addressed': return 'N/A';
     default: return status ?? 'Unknown';
   }
 }
 
-interface CoverageMatrixProps {
-  comparisons: ComparisonEntry[];
-}
-
-export function CoverageMatrix({ comparisons }: CoverageMatrixProps) {
+export function CoverageMatrix({ comparisons }: { comparisons: ComparisonEntry[] }) {
   if (comparisons.length === 0) {
-    return (
-      <p className="text-sm text-[#8b8b8b] py-8 text-center">
-        No coverage data found for this drug.
-      </p>
-    );
+    return <p className="text-sm text-slate-500 py-8 text-center">No coverage data found for this drug.</p>;
   }
 
   return (
-    <div className="rounded-2xl border border-[#e8e8e4] bg-white overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[#e8e8e4]">
-              <th className="text-left py-3 px-4 font-medium text-[#8b8b8b]">Payer</th>
-              <th className="text-left py-3 px-4 font-medium text-[#8b8b8b]">Plan</th>
-              <th className="text-left py-3 px-4 font-medium text-[#8b8b8b]">Coverage</th>
-              <th className="text-left py-3 px-4 font-medium text-[#8b8b8b]">Prior Auth</th>
-              <th className="text-left py-3 px-4 font-medium text-[#8b8b8b]">Step Therapy</th>
-              <th className="text-left py-3 px-4 font-medium text-[#8b8b8b]">Qty Limits</th>
-              <th className="text-right py-3 px-4 font-medium text-[#8b8b8b]">Confidence</th>
-            </tr>
-          </thead>
-          <tbody>
-            {comparisons.map((row, i) => {
-              const data = row.extractedData as Record<string, unknown> | undefined;
-              const stepTherapy = data?.stepTherapy as Array<{ stepNumber: number; drugOrClass: string }> | undefined;
-              const qtyLimits = data?.quantityLimits as { quantity: number; unit: string; period: string } | undefined;
-
-              return (
-                <tr key={i} className="border-b border-[#f0f0ec] hover:bg-[#f8f8f5] transition-colors">
-                  <td className="py-3 px-4 font-medium text-[#1a1a1a]">{row.payerName}</td>
-                  <td className="py-3 px-4">
-                    <span className="text-sm text-[#1a1a1a]">{row.planName}</span>
-                    <span className="block text-xs text-[#8b8b8b]">{row.lineOfBusiness}</span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${coverageStyle(row.coverageStatus)}`}>
-                      {coverageLabel(row.coverageStatus)}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4">
-                    {row.priorAuth ? (
-                      <span className="rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-xs font-medium">Required</span>
-                    ) : (
-                      <span className="text-sm text-[#8b8b8b]">No</span>
-                    )}
-                  </td>
-                  <td className="py-3 px-4">
-                    {stepTherapy && stepTherapy.length > 0 ? (
-                      <div className="space-y-1">
-                        {stepTherapy.map((step) => (
-                          <p key={step.stepNumber} className="text-xs text-[#6b6b6b]">
-                            <span className="font-mono text-[#8b8b8b]">Step {step.stepNumber}:</span>{' '}
-                            {step.drugOrClass}
-                          </p>
-                        ))}
-                      </div>
-                    ) : (
-                      <span className="text-sm text-[#8b8b8b]">None</span>
-                    )}
-                  </td>
-                  <td className="py-3 px-4">
-                    {qtyLimits ? (
-                      <span className="text-sm font-mono text-[#6b6b6b]">
-                        {qtyLimits.quantity} {qtyLimits.unit}/{qtyLimits.period}
-                      </span>
-                    ) : (
-                      <span className="text-sm text-[#8b8b8b]">None</span>
-                    )}
-                  </td>
-                  <td className="py-3 px-4 text-right">
-                    <span className="font-mono text-sm text-[#6b6b6b]">
-                      {row.confidence != null ? `${Math.round(row.confidence * 100)}%` : '—'}
-                    </span>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className="grid grid-cols-7 gap-3 border-b border-slate-200 bg-[#F6F8FB] px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <div>Plan</div>
+        <div>Coverage</div>
+        <div>Prior Auth</div>
+        <div>Step</div>
+        <div>Limit</div>
+        <div className="col-span-2">Key Criteria</div>
       </div>
+      {comparisons.map((row, i) => {
+        const data = row.extractedData as Record<string, unknown> | undefined;
+        const steps = data?.stepTherapy as Array<{ drugOrClass: string }> | undefined;
+        const qty = data?.quantityLimits as { quantity: number; unit: string; period: string } | undefined;
+        const criteria = data?.clinicalCriteria as Array<{ description: string }> | undefined;
+
+        return (
+          <div key={i} className={`grid grid-cols-7 gap-3 px-4 py-4 text-sm ${i < comparisons.length - 1 ? 'border-b border-slate-100' : ''}`}>
+            <div>
+              <div className="font-semibold text-slate-800">{row.payerName}</div>
+              <div className="text-slate-500">{row.planName}</div>
+            </div>
+            <div>
+              <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${coverageBadge(row.coverageStatus)}`}>
+                {coverageLabel(row.coverageStatus)}
+              </span>
+            </div>
+            <div className="text-slate-700">{row.priorAuth ? 'Required' : 'No'}</div>
+            <div className="text-slate-700">{steps && steps.length > 0 ? 'Yes' : 'No'}</div>
+            <div className="text-slate-700">{qty ? `${qty.quantity} ${qty.unit}` : 'Standard'}</div>
+            <div className="col-span-2">
+              <div className="text-slate-700">{criteria?.[0]?.description ?? '—'}</div>
+              <div className="mt-1 text-xs text-slate-400">Effective {row.effectiveDate}</div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

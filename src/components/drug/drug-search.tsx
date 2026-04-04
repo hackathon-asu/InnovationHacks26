@@ -10,47 +10,37 @@ export function DrugSearch() {
 
   return (
     <div className="space-y-4">
-      <input
-        placeholder="Search by drug name or J-code (e.g. Humira, J0135)"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        className="w-full max-w-lg rounded-xl border border-[#e8e8e4] bg-white px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#b0b0ac] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all"
-      />
+      <div className="flex gap-3 max-w-lg">
+        <input
+          placeholder="Search drug name or J-code (e.g. Humira, J0135)"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none placeholder:text-slate-400 focus:border-[#91BFEB] transition-colors"
+        />
+      </div>
 
-      {isLoading && (
-        <p className="text-sm text-[#8b8b8b]">Searching...</p>
-      )}
+      {isLoading && <p className="text-sm text-slate-500">Searching...</p>}
 
       {results.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {results.map((drug, i) => (
             <Link key={i} href={drug.rxcui ? `/drugs/${drug.rxcui}` : '#'}>
-              <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 hover:border-emerald-300 hover:shadow-sm transition-all space-y-2">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 hover:shadow-md transition-shadow space-y-2">
                 <div>
-                  <p className="font-medium text-[#1a1a1a]">
-                    {drug.brandName ?? drug.genericName ?? 'Unknown'}
-                  </p>
+                  <p className="font-semibold text-slate-800">{drug.brandName ?? drug.genericName ?? 'Unknown'}</p>
                   {drug.genericName && drug.brandName && (
-                    <p className="text-sm text-[#8b8b8b]">
-                      {drug.genericName}
-                    </p>
+                    <p className="text-sm text-slate-500">{drug.genericName}</p>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
                   {drug.jCode && (
-                    <span className="rounded-full bg-[#f0f0ec] px-2 py-0.5 text-xs font-mono text-[#6b6b6b]">
-                      {drug.jCode}
-                    </span>
+                    <span className="rounded-full border border-slate-200 bg-[#F6F8FB] px-2 py-0.5 text-xs font-mono text-slate-600">{drug.jCode}</span>
                   )}
                   {drug.rxcui && (
-                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-mono text-emerald-700">
-                      RxCUI: {drug.rxcui}
-                    </span>
+                    <span className="rounded-full border border-[#91BFEB] bg-[#dceeff] px-2 py-0.5 text-xs font-mono text-[#15173F]">RxCUI: {drug.rxcui}</span>
                   )}
                 </div>
-                <p className="text-xs text-[#8b8b8b]">
-                  {drug.planCount} plan{drug.planCount !== 1 ? 's' : ''}
-                </p>
+                <p className="text-xs text-slate-500">{drug.planCount} plan{drug.planCount !== 1 ? 's' : ''}</p>
               </div>
             </Link>
           ))}
@@ -58,9 +48,7 @@ export function DrugSearch() {
       )}
 
       {query.length >= 2 && !isLoading && results.length === 0 && (
-        <p className="text-sm text-[#8b8b8b]">
-          No drugs found matching &quot;{query}&quot;.
-        </p>
+        <p className="text-sm text-slate-500">No drugs found matching &quot;{query}&quot;.</p>
       )}
     </div>
   );
