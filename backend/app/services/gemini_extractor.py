@@ -17,12 +17,16 @@ Also added vs initial version:
   - ICD-10 codes per criterion
 """
 
+import asyncio
 import json
 import re
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 
 import google.generativeai as genai
 from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable
+
+# Limit to 1 concurrent Gemini call — free tier is 5 req/min and pipelines run in parallel
+_gemini_semaphore = asyncio.Semaphore(1)
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -185,21 +189,22 @@ def _is_retryable(exc: BaseException) -> bool:
 
 
 @retry(
-    stop=stop_after_attempt(5),
-    wait=wait_exponential(multiplier=2, min=20, max=120),
+    stop=stop_after_attempt(8),
+    wait=wait_exponential(multiplier=2, min=30, max=180),
     retry=retry_if_exception(_is_retryable),
 )
 async def _extract_section(model, section_text: str, hint_block: str) -> dict:
     """Extract structured data from a single section of the policy."""
     prompt = f"{hint_block}\n\nPOLICY DOCUMENT SECTION:\n\n{section_text}"
 
-    response = await model.generate_content_async(
-        prompt,
-        generation_config=genai.types.GenerationConfig(
-            temperature=0.0,
-            max_output_tokens=8192,
-        ),
-    )
+    async with _gemini_semaphore:
+        response = await model.generate_content_async(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.0,
+                max_output_tokens=8192,
+            ),
+        )
 
     raw_json = _strip_json_fences(response.text)
     try:

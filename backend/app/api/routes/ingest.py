@@ -33,11 +33,13 @@ MAX_BYTES = settings.max_upload_size_mb * 1024 * 1024
 STATUS_STAGES = {
     "pending":           (0,  []),
     "parsing":           (15, ["parse"]),
-    "extracting":        (30, ["parse", "extract"]),
-    "saving_structured": (50, ["parse", "extract", "postgres"]),
-    "chunking":          (60, ["parse", "extract", "postgres", "chunk"]),
-    "embedding":         (75, ["parse", "extract", "postgres", "chunk", "embed"]),
-    "indexing":          (90, ["parse", "extract", "postgres", "chunk", "embed", "index"]),
+    "nlp_extracting":    (25, ["parse"]),
+    "gemini_extracting": (40, ["parse", "extract"]),
+    "rxnorm":            (50, ["parse", "extract"]),
+    "saving_structured": (60, ["parse", "extract", "postgres"]),
+    "chunking":          (70, ["parse", "extract", "postgres", "chunk"]),
+    "embedding":         (82, ["parse", "extract", "postgres", "chunk", "embed"]),
+    "indexing":          (93, ["parse", "extract", "postgres", "chunk", "embed", "index"]),
     "indexed":           (100, ["parse", "extract", "postgres", "chunk", "embed", "index", "rag"]),
     "failed":            (0,  []),
 }
