@@ -22,11 +22,12 @@ import json
 import re
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 
+import httpx
 import google.generativeai as genai
 from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable
 
-# Limit to 1 concurrent Gemini call — free tier is 5 req/min and pipelines run in parallel
-_gemini_semaphore = asyncio.Semaphore(1)
+# Limit to 1 concurrent LLM call — Gemini free tier is 5 req/min; Ollama is single-threaded locally
+_llm_semaphore = asyncio.Semaphore(1)
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -194,10 +195,10 @@ def _is_retryable(exc: BaseException) -> bool:
     retry=retry_if_exception(_is_retryable),
 )
 async def _extract_section(model, section_text: str, hint_block: str) -> dict:
-    """Extract structured data from a single section of the policy."""
+    """Extract structured data from a single section of the policy (Gemini path)."""
     prompt = f"{hint_block}\n\nPOLICY DOCUMENT SECTION:\n\n{section_text}"
 
-    async with _gemini_semaphore:
+    async with _llm_semaphore:
         response = await model.generate_content_async(
             prompt,
             generation_config=genai.types.GenerationConfig(
@@ -211,6 +212,34 @@ async def _extract_section(model, section_text: str, hint_block: str) -> dict:
         return json.loads(raw_json)
     except json.JSONDecodeError as e:
         log.warning("JSON parse failed, retrying", error=str(e), snippet=raw_json[:300])
+        raise
+
+
+async def _extract_section_ollama(section_text: str, hint_block: str) -> dict:
+    """Extract structured data from a single section of the policy (Ollama path)."""
+    prompt = f"{hint_block}\n\nPOLICY DOCUMENT SECTION:\n\n{section_text}"
+
+    async with _llm_semaphore:
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            response = await client.post(
+                f"{settings.ollama_base_url}/api/chat",
+                json={
+                    "model": settings.ollama_model,
+                    "messages": [
+                        {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "stream": False,
+                    "options": {"temperature": 0},
+                },
+            )
+            response.raise_for_status()
+
+    raw_json = _strip_json_fences(response.json()["message"]["content"])
+    try:
+        return json.loads(raw_json)
+    except json.JSONDecodeError as e:
+        log.warning("Ollama JSON parse failed", error=str(e), snippet=raw_json[:300])
         raise
 
 
@@ -247,30 +276,41 @@ async def extract_policy_structure(raw_text: str, nlp_result: MedNLPResult) -> P
     """
     Main entry point. Takes raw policy text + NLP hints → returns validated PolicyExtracted.
     Handles long policies by splitting into sections and merging results.
+    Branches on settings.llm_provider: "ollama" or "gemini".
     """
-    model = genai.GenerativeModel(
-        model_name=settings.gemini_model,
-        system_instruction=EXTRACTION_SYSTEM_PROMPT,
-    )
-
     hint_block = _build_hint_block(nlp_result)
     sections = _split_into_sections(raw_text)
 
-    log.info("Sending to Gemini", sections=len(sections), total_chars=len(raw_text))
-
-    if len(sections) == 1:
-        data = await _extract_section(model, sections[0], hint_block)
+    if settings.llm_provider == "ollama":
+        log.info("Sending to Ollama", model=settings.ollama_model, sections=len(sections), total_chars=len(raw_text))
+        if len(sections) == 1:
+            data = await _extract_section_ollama(sections[0], hint_block)
+        else:
+            section_results = await asyncio.gather(
+                *[_extract_section_ollama(s, hint_block) for s in sections],
+                return_exceptions=True
+            )
+            valid = [r for r in section_results if isinstance(r, dict)]
+            data = _merge_section_results(valid)
     else:
-        import asyncio
-        section_results = await asyncio.gather(
-            *[_extract_section(model, s, hint_block) for s in sections],
-            return_exceptions=True
+        model = genai.GenerativeModel(
+            model_name=settings.gemini_model,
+            system_instruction=EXTRACTION_SYSTEM_PROMPT,
         )
-        valid = [r for r in section_results if isinstance(r, dict)]
-        data = _merge_section_results(valid)
+        log.info("Sending to Gemini", sections=len(sections), total_chars=len(raw_text))
+        if len(sections) == 1:
+            data = await _extract_section(model, sections[0], hint_block)
+        else:
+            section_results = await asyncio.gather(
+                *[_extract_section(model, s, hint_block) for s in sections],
+                return_exceptions=True
+            )
+            valid = [r for r in section_results if isinstance(r, dict)]
+            data = _merge_section_results(valid)
 
     extracted = PolicyExtracted(**data)
-    log.info("Gemini extraction complete",
+    log.info("Extraction complete",
+             provider=settings.llm_provider,
              payer=extracted.payer_name,
              drugs=len(extracted.drug_coverages))
     return extracted
