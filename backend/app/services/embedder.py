@@ -57,20 +57,21 @@ def _embed_batch_ollama(texts: list[str]) -> list[list[float]]:
     return results
 
 
-async def embed_chunks(chunks: "list[Chunk]") -> list[list[float]]:
+async def embed_chunks(chunks: "list[Chunk]", provider: str | None = None) -> list[list[float]]:
     """Embed document chunks in batches of 50."""
     texts = [c.text for c in chunks]
     embeddings: list[list[float]] = []
     loop = asyncio.get_event_loop()
+    selected_provider = provider or settings.llm_provider
 
     for i in range(0, len(texts), BATCH_SIZE):
         batch = texts[i: i + BATCH_SIZE]
-        if settings.llm_provider == "ollama":
+        if selected_provider == "ollama":
             batch_embeddings = await loop.run_in_executor(None, _embed_batch_ollama, batch)
         else:
             batch_embeddings = await loop.run_in_executor(None, _embed_batch_gemini, batch, "retrieval_document")
         embeddings.extend(batch_embeddings)
-        log.debug("Embedded batch", provider=settings.llm_provider, start=i, size=len(batch))
+        log.debug("Embedded batch", provider=selected_provider, start=i, size=len(batch))
 
     return embeddings
 

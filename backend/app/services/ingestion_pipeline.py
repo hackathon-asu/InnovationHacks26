@@ -81,9 +81,9 @@ async def _save_criterion(db: AsyncSession, coverage_id: uuid.UUID, criterion_da
         await _save_criterion(db, coverage_id, child, parent_id=criterion.id)
 
 
-async def run_ingestion_pipeline(policy_id: uuid.UUID, file_path: Path):
+async def run_ingestion_pipeline(policy_id: uuid.UUID, file_path: Path, provider: str | None = None):
     """Full 8-stage pipeline. Runs as a FastAPI BackgroundTask."""
-    log.info("Pipeline starting", policy_id=str(policy_id))
+    log.info("Pipeline starting", policy_id=str(policy_id), provider=provider)
 
     try:
         # ── Stage 1: Parse (Docling → Marker → pypdf) ────────────────────────
@@ -96,7 +96,16 @@ async def run_ingestion_pipeline(policy_id: uuid.UUID, file_path: Path):
 
         # ── Stage 3: Gemini structured extraction (NLP-grounded) ──────────────
         await _set_status(policy_id, "gemini_extracting")
-        extracted = await extract_policy_structure(parsed.full_text, nlp_result)
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(Policy).where(Policy.id == policy_id))
+            policy_for_extraction = result.scalar_one()
+
+        extracted = await extract_policy_structure(
+            parsed.full_text,
+            nlp_result,
+            provider=provider,
+            filename=policy_for_extraction.filename,
+        )
 
         # ── Stage 4: RxNorm normalization ─────────────────────────────────────
         await _set_status(policy_id, "rxnorm")
@@ -209,7 +218,7 @@ async def run_ingestion_pipeline(policy_id: uuid.UUID, file_path: Path):
 
         # ── Stage 7: Embed (Gemini text-embedding-004, batched) ───────────────
         await _set_status(policy_id, "embedding")
-        embeddings = await embed_chunks(chunks)
+        embeddings = await embed_chunks(chunks, provider=provider)
 
         # ── Stage 8: Index in pgvector ────────────────────────────────────────
         await _set_status(policy_id, "indexing")
@@ -233,7 +242,7 @@ async def run_ingestion_pipeline(policy_id: uuid.UUID, file_path: Path):
             log.info("Vectors indexed", chunks=len(chunks))
 
         await _set_status(policy_id, "indexed")
-        log.info("Pipeline complete", policy_id=str(policy_id),
+        log.info("Pipeline complete", policy_id=str(policy_id), provider=provider,
                  drugs=len(extracted.drug_coverages), chunks=len(chunks))
 
     except Exception as e:

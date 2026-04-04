@@ -13,7 +13,7 @@ type PipelineStatus = {
 };
 
 export default function UploadPage() {
-  const [provider, setProvider] = useState<'gemini' | 'ollama' | 'groq'>('gemini');
+  const [provider, setProvider] = useState<'gemini' | 'ollama' | 'groq'>('ollama');
   const [uploading, setUploading] = useState(false);
   const [policyId, setPolicyId] = useState<string | null>(null);
   const [pipeline, setPipeline] = useState<PipelineStatus | null>(null);

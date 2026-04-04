@@ -47,13 +47,42 @@ STATUS_STAGES = {
 ALL_STAGES = ["parse", "extract", "postgres", "chunk", "embed", "index", "rag"]
 STAGE_LABELS = {
     "parse":    "Parse & OCR",
-    "extract":  "Gemini extraction",
+    "extract":  "LLM extraction",
     "postgres": "Save to PostgreSQL",
     "chunk":    "Chunk document",
     "embed":    "Embed chunks",
     "index":    "Index in pgvector",
     "rag":      "Ready for RAG",
 }
+
+FAILED_STAGE_HINTS = {
+    "parse": ("docling", "marker", "pypdf", "parse", "ocr", "pdf"),
+    "extract": ("json", "structured extraction", "ollama", "gemini", "groq", "section"),
+    "postgres": ("postgres", "sql", "database", "duplicate key", "constraint"),
+    "chunk": ("chunk",),
+    "embed": ("embed", "embedding"),
+    "index": ("index", "pgvector", "vector"),
+    "rag": ("rag",),
+}
+
+
+def _infer_failed_stage(policy: Policy) -> str:
+    if policy.error_message:
+        lowered = policy.error_message.lower()
+        for stage, hints in FAILED_STAGE_HINTS.items():
+            if any(hint in lowered for hint in hints):
+                return stage
+
+    return {
+        "parsing": "parse",
+        "nlp_extracting": "extract",
+        "gemini_extracting": "extract",
+        "rxnorm": "extract",
+        "saving_structured": "postgres",
+        "chunking": "chunk",
+        "embedding": "embed",
+        "indexing": "index",
+    }.get(policy.status, "extract")
 
 
 @router.post("/upload", response_model=PolicyUploadResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -103,12 +132,10 @@ async def upload_policy(
     db.add(policy)
     await db.commit()
 
-    # Override LLM provider for this run if specified
-    if provider and provider in ("gemini", "ollama", "groq"):
-        settings.llm_provider = provider
+    selected_provider = provider if provider in ("gemini", "ollama", "groq") else settings.llm_provider
 
     # Launch pipeline in background — returns immediately to caller
-    background_tasks.add_task(run_ingestion_pipeline, policy_id, dest_path)
+    background_tasks.add_task(run_ingestion_pipeline, policy_id, dest_path, selected_provider)
 
     return PolicyUploadResponse(
         policy_id=policy_id,
@@ -127,6 +154,7 @@ async def get_pipeline_status(policy_id: uuid.UUID, db: AsyncSession = Depends(g
         raise HTTPException(status_code=404, detail="Policy not found")
 
     progress, done_stages = STATUS_STAGES.get(policy.status, (0, []))
+    failed_stage = _infer_failed_stage(policy) if policy.status == "failed" else None
 
     stages = []
     for s in ALL_STAGES:
@@ -141,7 +169,7 @@ async def get_pipeline_status(policy_id: uuid.UUID, db: AsyncSession = Depends(g
             if s_idx == done_count and policy.status not in ("indexed", "failed"):
                 st = "running"
             elif policy.status == "failed":
-                st = "error" if s_idx == len(done_stages) else ("done" if s in done_stages else "pending")
+                st = "error" if s == failed_stage else ("done" if s in done_stages else "pending")
             else:
                 st = "pending"
 
