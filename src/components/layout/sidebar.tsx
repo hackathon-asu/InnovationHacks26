@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Pill, GitCompareArrows, FileText,
-  History, MessageSquare, Upload, Menu, X,
+  History, MessageSquare, Upload, Menu, X, BookOpen,
 } from 'lucide-react';
 import { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
@@ -17,6 +17,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: '/changes', label: 'Changes', icon: History },
   { href: '/chat', label: 'Ask AI', icon: MessageSquare },
   { href: '/upload', label: 'Upload', icon: Upload },
+  { href: '/api-docs', label: 'API Docs', icon: BookOpen },
 ];
 
 function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
