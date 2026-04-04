@@ -1,96 +1,34 @@
-import { Suspense } from 'react';
 import Link from 'next/link';
-import { getDashboardStats, getRecentChanges } from '@/lib/db/queries';
 
-async function StatsGrid() {
-  const stats = await getDashboardStats();
-  const items = [
+async function getStats() {
+  try {
+    const res = await fetch('http://localhost:3000/api/stats', { cache: 'no-store' });
+    return res.json();
+  } catch {
+    return { totalDrugs: 0, totalPlans: 0, totalPolicies: 0, totalChanges: 0 };
+  }
+}
+
+async function getChanges() {
+  try {
+    const res = await fetch('http://localhost:3000/api/changes', { cache: 'no-store' });
+    const data = await res.json();
+    return data.changes ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export default async function DashboardPage() {
+  const [stats, changes] = await Promise.all([getStats(), getChanges()]);
+
+  const statCards = [
     { value: stats.totalPolicies, label: 'Policies uploaded' },
     { value: stats.totalDrugs, label: 'Drugs extracted' },
     { value: stats.totalPlans, label: 'Plans compared' },
     { value: stats.totalChanges, label: 'Policy changes' },
   ];
 
-  return (
-    <div className="grid grid-cols-2 gap-4 self-end md:grid-cols-4">
-      {items.map((item) => (
-        <div key={item.label} className="rounded-2xl border border-white/20 bg-white/90 p-5 shadow-lg backdrop-blur">
-          <div className="text-3xl font-bold text-[#15173F] font-[var(--font-montserrat)]">{item.value}</div>
-          <div className="mt-1 text-sm text-slate-600">{item.label}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-async function RecentChangesSection() {
-  const changes = await getRecentChanges(5);
-
-  return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h2 className="text-2xl font-semibold font-[var(--font-montserrat)]">Recent policy changes</h2>
-          <p className="mt-1 text-sm text-slate-500">What changed across payer drug policies this quarter.</p>
-        </div>
-        <Link href="/changes" className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
-          View all
-        </Link>
-      </div>
-
-      {changes.length === 0 ? (
-        <p className="text-sm text-slate-500 py-4 text-center">No changes yet. Upload policies to see version tracking.</p>
-      ) : (
-        <div className="space-y-3">
-          {changes.map((c, i) => {
-            const diffs = c.diffJson as Array<{ field: string; significance: string; old?: string; new?: string }> | null;
-            const severity = diffs?.[0]?.significance;
-            return (
-              <div key={i} className="flex items-start justify-between rounded-2xl border border-slate-200 px-4 py-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-slate-800">{c.payerName}</span>
-                    <span className="text-slate-400">•</span>
-                    <span className="text-sm text-slate-500">{c.planName}</span>
-                  </div>
-                  <p className="text-sm text-slate-600 mt-0.5 max-w-xl">
-                    {c.changeSummary ?? c.policyTitle}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {severity && (
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                      severity === 'breaking' ? 'border border-red-200 bg-red-50 text-red-800' :
-                      severity === 'material' ? 'border border-amber-200 bg-amber-50 text-amber-800' :
-                      'border border-slate-200 bg-slate-50 text-slate-700'
-                    }`}>
-                      {severity}
-                    </span>
-                  )}
-                  <span className="rounded-full bg-[#dceeff] border border-[#91BFEB] px-3 py-1 text-xs font-semibold text-[#15173F]">
-                    v{c.versionNumber}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function StatsLoading() {
-  return (
-    <div className="grid grid-cols-2 gap-4 self-end md:grid-cols-4">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="rounded-2xl border border-white/20 bg-white/60 p-5 h-24 animate-pulse" />
-      ))}
-    </div>
-  );
-}
-
-export default function DashboardPage() {
   return (
     <div>
       {/* Hero */}
@@ -123,17 +61,48 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <Suspense fallback={<StatsLoading />}>
-            <StatsGrid />
-          </Suspense>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            {statCards.map((item) => (
+              <div key={item.label} className="rounded-2xl border border-white/20 bg-white/90 p-5 shadow-lg backdrop-blur">
+                <div className="text-3xl font-bold text-[#15173F] font-[var(--font-montserrat)]">{item.value}</div>
+                <div className="mt-1 text-sm text-slate-600">{item.label}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* Main content */}
+      {/* Main */}
       <main className="mx-auto max-w-7xl space-y-8 px-6 py-8">
-        <Suspense fallback={<div className="h-64 bg-white rounded-3xl animate-pulse" />}>
-          <RecentChangesSection />
-        </Suspense>
+        {/* Recent changes */}
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-2xl font-semibold font-[var(--font-montserrat)]">Recent policy changes</h2>
+              <p className="mt-1 text-sm text-slate-500">What changed across payer drug policies.</p>
+            </div>
+            <Link href="/changes" className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+              View all
+            </Link>
+          </div>
+
+          {changes.length === 0 ? (
+            <p className="text-sm text-slate-500 py-4 text-center">No changes yet. Upload policies to start tracking.</p>
+          ) : (
+            <div className="space-y-3">
+              {changes.slice(0, 5).map((c: Record<string, unknown>, i: number) => (
+                <div key={i} className="flex items-start justify-between rounded-2xl border border-slate-200 px-4 py-3">
+                  <div>
+                    <span className="font-medium text-slate-800">{String(c.payerName ?? '')}</span>
+                    <span className="text-slate-400 mx-2">•</span>
+                    <span className="text-sm text-slate-500">{String(c.planName ?? '')}</span>
+                    <p className="text-sm text-slate-600 mt-0.5 max-w-xl truncate">{String(c.changeSummary ?? c.policyTitle ?? '')}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Quick actions */}
         <div className="grid gap-6 md:grid-cols-3">
