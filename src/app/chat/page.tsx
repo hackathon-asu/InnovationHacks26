@@ -2,14 +2,14 @@ import { ChatInterface } from '@/components/chat/chat-interface';
 
 export default function ChatPage() {
   return (
-    <div className="space-y-4 pt-8">
+    <main className="mx-auto max-w-7xl px-6 py-8 space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold tracking-tight text-[#1a1a1a]">Policy Q&A</h1>
-        <p className="text-sm text-[#8b8b8b] mt-1">
-          Ask natural language questions about drug coverage policies.
-        </p>
+        <h1 className="text-2xl font-semibold font-[var(--font-montserrat)]">Policy Q&A</h1>
+        <p className="mt-1 text-sm text-slate-500">Ask natural language questions about drug coverage policies.</p>
       </div>
-      <ChatInterface />
-    </div>
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <ChatInterface />
+      </div>
+    </main>
   );
 }
