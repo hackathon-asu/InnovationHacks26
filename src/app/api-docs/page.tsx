@@ -15,14 +15,12 @@ export default function ApiDocsPage() {
     script.src = 'https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js';
     script.onload = () => {
       if (containerRef.current && (window as unknown as Record<string, unknown>).SwaggerUIBundle) {
-        const SwaggerUIBundle = (window as unknown as Record<string, unknown>).SwaggerUIBundle as (config: Record<string, unknown>) => void;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const SwaggerUIBundle = (window as any).SwaggerUIBundle;
         SwaggerUIBundle({
           url: '/api/openapi',
           dom_id: '#swagger-ui',
           deepLinking: true,
-          presets: [
-            (window as unknown as Record<string, { SwaggerUIStandalonePreset: unknown }>).SwaggerUIBundle?.presets?.apis,
-          ].filter(Boolean),
           layout: 'BaseLayout',
           defaultModelsExpandDepth: 2,
           tryItOutEnabled: true,
