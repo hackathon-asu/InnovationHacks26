@@ -1,5 +1,4 @@
 import { Suspense } from 'react';
-import { Skeleton } from '@/components/ui/skeleton';
 import { PolicyCard } from '@/components/policy/policy-card';
 import { db } from '@/lib/db';
 import { policies, plans, payers } from '@/lib/db/schema';
@@ -26,7 +25,7 @@ async function PolicyList() {
 
   if (results.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-[#8b8b8b] py-8 text-center">
         No policies found. Run the seed script to populate data.
       </p>
     );
@@ -43,10 +42,10 @@ async function PolicyList() {
 
 export default function PoliciesPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pt-8">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Policies</h1>
-        <p className="text-sm text-muted-foreground mt-1">
+        <h1 className="text-3xl font-semibold tracking-tight text-[#1a1a1a]">Policies</h1>
+        <p className="text-sm text-[#8b8b8b] mt-1">
           Browse medical policies by payer and plan.
         </p>
       </div>
@@ -55,7 +54,7 @@ export default function PoliciesPage() {
         fallback={
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-40 w-full rounded-lg" />
+              <div key={i} className="h-40 bg-[#f4f4f0] rounded-2xl animate-pulse" />
             ))}
           </div>
         }
