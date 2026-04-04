@@ -1,0 +1,6 @@
+import { getDashboardStats } from '@/lib/db/queries';
+
+export async function GET() {
+  const stats = await getDashboardStats();
+  return Response.json(stats);
+}
