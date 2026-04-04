@@ -1,19 +1,14 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
-import {
-  Table, TableBody, TableCell, TableHead,
-  TableHeader, TableRow,
-} from '@/components/ui/table';
 import type { ComparisonEntry } from '@/lib/types/comparison';
 
-function coverageColor(status: string | undefined) {
+function coverageStyle(status: string | undefined) {
   switch (status) {
-    case 'covered': return 'bg-[var(--color-covered)]/15 text-[var(--color-covered)]';
-    case 'not_covered': return 'bg-[var(--color-not-covered)]/15 text-[var(--color-not-covered)]';
-    case 'covered_with_criteria': return 'bg-[var(--color-criteria)]/15 text-[var(--color-criteria)]';
-    case 'experimental': return 'bg-[var(--color-experimental)]/15 text-[var(--color-experimental)]';
-    default: return 'bg-muted text-muted-foreground';
+    case 'covered': return 'bg-emerald-100 text-emerald-700';
+    case 'not_covered': return 'bg-red-100 text-red-700';
+    case 'covered_with_criteria': return 'bg-amber-100 text-amber-700';
+    case 'experimental': return 'bg-purple-100 text-purple-700';
+    default: return 'bg-[#f0f0ec] text-[#8b8b8b]';
   }
 }
 
@@ -35,92 +30,86 @@ interface CoverageMatrixProps {
 export function CoverageMatrix({ comparisons }: CoverageMatrixProps) {
   if (comparisons.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-[#8b8b8b] py-8 text-center">
         No coverage data found for this drug.
       </p>
     );
   }
 
   return (
-    <div className="rounded-lg border border-border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-40">Payer</TableHead>
-            <TableHead>Plan</TableHead>
-            <TableHead>Coverage</TableHead>
-            <TableHead>Prior Auth</TableHead>
-            <TableHead>Step Therapy</TableHead>
-            <TableHead>Qty Limits</TableHead>
-            <TableHead className="text-right">Confidence</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {comparisons.map((row, i) => {
-            const data = row.extractedData as Record<string, unknown> | undefined;
-            const stepTherapy = data?.stepTherapy as Array<{ stepNumber: number; drugOrClass: string }> | undefined;
-            const qtyLimits = data?.quantityLimits as { quantity: number; unit: string; period: string } | undefined;
+    <div className="rounded-2xl border border-[#e8e8e4] bg-white overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-[#e8e8e4]">
+              <th className="text-left py-3 px-4 font-medium text-[#8b8b8b]">Payer</th>
+              <th className="text-left py-3 px-4 font-medium text-[#8b8b8b]">Plan</th>
+              <th className="text-left py-3 px-4 font-medium text-[#8b8b8b]">Coverage</th>
+              <th className="text-left py-3 px-4 font-medium text-[#8b8b8b]">Prior Auth</th>
+              <th className="text-left py-3 px-4 font-medium text-[#8b8b8b]">Step Therapy</th>
+              <th className="text-left py-3 px-4 font-medium text-[#8b8b8b]">Qty Limits</th>
+              <th className="text-right py-3 px-4 font-medium text-[#8b8b8b]">Confidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {comparisons.map((row, i) => {
+              const data = row.extractedData as Record<string, unknown> | undefined;
+              const stepTherapy = data?.stepTherapy as Array<{ stepNumber: number; drugOrClass: string }> | undefined;
+              const qtyLimits = data?.quantityLimits as { quantity: number; unit: string; period: string } | undefined;
 
-            return (
-              <TableRow key={i}>
-                <TableCell className="font-medium">{row.payerName}</TableCell>
-                <TableCell>
-                  <div>
-                    <span className="text-sm">{row.planName}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {row.lineOfBusiness}
+              return (
+                <tr key={i} className="border-b border-[#f0f0ec] hover:bg-[#f8f8f5] transition-colors">
+                  <td className="py-3 px-4 font-medium text-[#1a1a1a]">{row.payerName}</td>
+                  <td className="py-3 px-4">
+                    <span className="text-sm text-[#1a1a1a]">{row.planName}</span>
+                    <span className="block text-xs text-[#8b8b8b]">{row.lineOfBusiness}</span>
+                  </td>
+                  <td className="py-3 px-4">
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${coverageStyle(row.coverageStatus)}`}>
+                      {coverageLabel(row.coverageStatus)}
                     </span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge className={coverageColor(row.coverageStatus)} variant="secondary">
-                    {coverageLabel(row.coverageStatus)}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  {row.priorAuth ? (
-                    <Badge variant="outline">Required</Badge>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">No</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {stepTherapy && stepTherapy.length > 0 ? (
-                    <div className="space-y-1">
-                      {stepTherapy.map((step) => (
-                        <p key={step.stepNumber} className="text-xs">
-                          <span className="font-mono text-muted-foreground">
-                            Step {step.stepNumber}:
-                          </span>{' '}
-                          {step.drugOrClass}
-                        </p>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">None</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {qtyLimits ? (
-                    <span className="text-sm font-mono">
-                      {qtyLimits.quantity} {qtyLimits.unit}/{qtyLimits.period}
+                  </td>
+                  <td className="py-3 px-4">
+                    {row.priorAuth ? (
+                      <span className="rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-xs font-medium">Required</span>
+                    ) : (
+                      <span className="text-sm text-[#8b8b8b]">No</span>
+                    )}
+                  </td>
+                  <td className="py-3 px-4">
+                    {stepTherapy && stepTherapy.length > 0 ? (
+                      <div className="space-y-1">
+                        {stepTherapy.map((step) => (
+                          <p key={step.stepNumber} className="text-xs text-[#6b6b6b]">
+                            <span className="font-mono text-[#8b8b8b]">Step {step.stepNumber}:</span>{' '}
+                            {step.drugOrClass}
+                          </p>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-[#8b8b8b]">None</span>
+                    )}
+                  </td>
+                  <td className="py-3 px-4">
+                    {qtyLimits ? (
+                      <span className="text-sm font-mono text-[#6b6b6b]">
+                        {qtyLimits.quantity} {qtyLimits.unit}/{qtyLimits.period}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-[#8b8b8b]">None</span>
+                    )}
+                  </td>
+                  <td className="py-3 px-4 text-right">
+                    <span className="font-mono text-sm text-[#6b6b6b]">
+                      {row.confidence != null ? `${Math.round(row.confidence * 100)}%` : '—'}
                     </span>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">None</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-right">
-                  <span className="font-mono text-sm">
-                    {row.confidence != null
-                      ? `${Math.round(row.confidence * 100)}%`
-                      : '—'}
-                  </span>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
