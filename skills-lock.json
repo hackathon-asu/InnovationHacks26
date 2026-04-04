@@ -1,6 +1,11 @@
 {
   "version": 1,
   "skills": {
+    "ai-rag-pipeline": {
+      "source": "inferen-sh/skills",
+      "sourceType": "github",
+      "computedHash": "0a094c7b4f3bfab05b1a1b31aa93d9e11c85e7310c00272a21a6fe28e0b9bde8"
+    },
     "find-skills": {
       "source": "vercel-labs/skills",
       "sourceType": "github",
@@ -10,6 +15,16 @@
       "source": "anthropics/skills",
       "sourceType": "github",
       "computedHash": "063a0e6448123cd359ad0044cc46b0e490cc7964d45ef4bb9fd842bd2ffbca67"
+    },
+    "nosql-expert": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "4e9e283f53811ffcbdc7aa7e34447e7ad784aa355c7e2477128e3d57a5b65c0a"
+    },
+    "rag-implementation": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "computedHash": "fcf8874b44501e34362a3c31e231f922f3ea1376c8afaf92e8550f88287e1ca2"
     },
     "remotion-best-practices": {
       "source": "remotion-dev/skills",
