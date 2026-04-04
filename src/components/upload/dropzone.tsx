@@ -15,57 +15,42 @@ export function Dropzone({ onUpload, isUploading }: DropzoneProps) {
     e.preventDefault();
     setDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file?.type === 'application/pdf') {
-      setSelectedFile(file);
-    }
-  }, []);
-
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) setSelectedFile(file);
+    if (file?.type === 'application/pdf') setSelectedFile(file);
   }, []);
 
   return (
     <div className="space-y-4">
       <div
-        className={`relative rounded-2xl border-2 border-dashed transition-colors ${
-          dragOver ? 'border-emerald-400 bg-emerald-50' : 'border-[#d8d8d4] bg-white'
+        className={`relative rounded-2xl border-2 border-dashed p-8 text-center transition-colors ${
+          dragOver ? 'border-[#91BFEB] bg-[#f5fbff]' : 'border-[#91BFEB] bg-[#f5fbff]'
         }`}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
       >
-        <div className="flex flex-col items-center justify-center py-12">
-          <p className="text-sm font-medium text-[#1a1a1a]">
-            {dragOver ? 'Drop PDF here' : 'Drag & drop a policy PDF'}
-          </p>
-          <p className="text-xs text-[#8b8b8b] mt-1">or click to browse</p>
+        <div className="mx-auto mb-3 h-12 w-12 rounded-2xl bg-[#dceeff]" />
+        <div className="text-lg font-semibold text-[#15173F]">
+          {dragOver ? 'Drop PDF here' : 'Drag and drop policy PDFs here'}
         </div>
+        <div className="mt-2 text-sm text-slate-500">Supports payer policy docs, updates, and versioned plan criteria</div>
         <input
           type="file"
           accept=".pdf"
-          onChange={handleFileSelect}
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) setSelectedFile(f); }}
           className="absolute inset-0 cursor-pointer opacity-0"
         />
       </div>
 
       {selectedFile && (
-        <div className="flex items-center justify-between rounded-2xl border border-[#e8e8e4] bg-white p-4">
-          <div className="flex items-center gap-3">
-            <span className="rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-xs font-mono font-medium">
-              PDF
-            </span>
-            <div>
-              <p className="text-sm font-medium text-[#1a1a1a]">{selectedFile.name}</p>
-              <p className="text-xs text-[#8b8b8b]">
-                {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-              </p>
-            </div>
+        <div className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
+          <div>
+            <div className="font-medium text-slate-800">{selectedFile.name}</div>
+            <div className="text-sm text-slate-500">PDF • {(selectedFile.size / 1024 / 1024).toFixed(2)} MB</div>
           </div>
           <button
             onClick={() => onUpload(selectedFile)}
             disabled={isUploading}
-            className="rounded-xl bg-[#1a1a1a] px-4 py-2 text-sm font-medium text-white hover:bg-[#333] disabled:opacity-50 transition-colors"
+            className="rounded-xl bg-[#91BFEB] px-4 py-2 text-sm font-semibold text-[#15173F] hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             {isUploading ? 'Processing...' : 'Upload & Extract'}
           </button>

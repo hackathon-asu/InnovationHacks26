@@ -13,21 +13,11 @@ export default function UploadPage() {
   async function handleUpload(file: File) {
     setStatus('uploading');
     setError(null);
-
     try {
       const formData = new FormData();
       formData.append('file', file);
-
-      const res = await fetch('/api/policies/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? 'Upload failed');
-      }
-
+      const res = await fetch('/api/policies/upload', { method: 'POST', body: formData });
+      if (!res.ok) { const data = await res.json(); throw new Error(data.error ?? 'Upload failed'); }
       const data = await res.json();
       setJobId(data.jobId ?? data.policy_id);
       setStatus('complete');
@@ -38,46 +28,48 @@ export default function UploadPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl pt-8">
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight text-[#1a1a1a]">Upload Policy</h1>
-        <p className="text-sm text-[#8b8b8b] mt-1">
-          Upload a medical policy PDF to extract and analyze coverage data.
-        </p>
-      </div>
-
-      <Dropzone onUpload={handleUpload} isUploading={status === 'uploading'} />
-
-      {status === 'uploading' && (
-        <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 flex items-center gap-3">
-          <span className="animate-pulse text-sm text-[#6b6b6b]">
-            Extracting policy data...
-          </span>
-          <span className="rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-xs font-medium">
-            Processing
-          </span>
-        </div>
-      )}
-
-      {status === 'complete' && jobId && (
-        <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-xs font-medium">
-              Complete
-            </span>
-            <span className="text-sm font-medium text-[#1a1a1a]">
-              Policy extracted successfully
-            </span>
+    <main className="mx-auto max-w-7xl px-6 py-8">
+      <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-5">
+            <h2 className="text-2xl font-semibold font-[var(--font-montserrat)]">Upload and ingest</h2>
+            <p className="mt-1 text-sm text-slate-500">Drop policy PDFs to extract drug rules and coverage criteria.</p>
           </div>
-          <p className="text-xs text-[#8b8b8b] font-mono">ID: {jobId}</p>
-        </div>
-      )}
+          <Dropzone onUpload={handleUpload} isUploading={status === 'uploading'} />
 
-      {status === 'error' && error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
-          <p className="text-sm text-red-700">{error}</p>
+          {status === 'complete' && jobId && (
+            <div className="mt-4 flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
+              <div className="font-medium text-slate-800">Policy extracted successfully</div>
+              <span className="rounded-full border border-[#91BFEB] bg-[#dceeff] px-3 py-1 text-xs font-semibold text-[#15173F]">Parsed</span>
+            </div>
+          )}
+          {status === 'error' && error && (
+            <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+          )}
         </div>
-      )}
-    </div>
+
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h3 className="text-xl font-semibold font-[var(--font-montserrat)]">AI ingestion pipeline</h3>
+          <div className="mt-5 space-y-4">
+            {[
+              { n: 1, label: 'PDF text extracted (Docling)' },
+              { n: 2, label: 'NLP entity extraction (scispaCy)' },
+              { n: 3, label: 'Structured extraction (Gemini)' },
+              { n: 4, label: 'Drug normalization (RxNorm)' },
+              { n: 5, label: 'Embeddings + pgvector index' },
+            ].map((step) => (
+              <div key={step.n} className="flex items-center gap-4">
+                <div className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${
+                  step.n <= 3 ? 'bg-[#91BFEB] text-[#15173F]' : 'bg-[#15173F] text-white'
+                }`}>
+                  {step.n}
+                </div>
+                <div className="font-medium text-slate-700">{step.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </main>
   );
 }
