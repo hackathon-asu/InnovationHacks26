@@ -1,35 +1,25 @@
-import { Suspense } from 'react';
-import { Skeleton } from '@/components/ui/skeleton';
+'use client';
+
 import { CoverageMatrix } from '@/components/drug/coverage-matrix';
-import { getDrugCoverage } from '@/lib/db/queries';
-import type { ComparisonEntry } from '@/lib/types/comparison';
+import { useComparison } from '@/hooks/use-comparison';
+import { useParams } from 'next/navigation';
 
-async function CoverageData({ rxcui }: { rxcui: string }) {
-  const rows = await getDrugCoverage(rxcui);
-  return <CoverageMatrix comparisons={rows as unknown as ComparisonEntry[]} />;
-}
-
-export default async function DrugCoveragePage({
-  params,
-}: {
-  params: Promise<{ rxcui: string }>;
-}) {
-  const { rxcui } = await params;
+export default function DrugCoveragePage() {
+  const params = useParams();
+  const rxcui = params.rxcui as string;
+  const { comparisons, isLoading } = useComparison(rxcui);
 
   return (
-    <div className="space-y-6">
+    <main className="mx-auto max-w-7xl px-6 py-8 space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Coverage Matrix
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1 font-mono">
-          RxCUI: {rxcui}
-        </p>
+        <h1 className="text-2xl font-semibold font-[var(--font-montserrat)]">Coverage Matrix</h1>
+        <p className="mt-1 text-sm text-slate-500 font-mono">RxCUI: {rxcui}</p>
       </div>
-
-      <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-        <CoverageData rxcui={rxcui} />
-      </Suspense>
-    </div>
+      {isLoading ? (
+        <div className="h-32 bg-white rounded-2xl animate-pulse" />
+      ) : (
+        <CoverageMatrix comparisons={comparisons} />
+      )}
+    </main>
   );
 }
