@@ -17,6 +17,7 @@ import re
 import uuid
 from typing import Optional
 
+import httpx
 import google.generativeai as genai
 from sqlalchemy import select, and_, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -272,19 +273,35 @@ async def answer_query(
 Answer the question based strictly on the context above."""
 
     # ── Generate ──────────────────────────────────────────────────────────────
-    model = genai.GenerativeModel(
-        model_name=settings.gemini_model,
-        system_instruction=ANSWER_SYSTEM_PROMPT,
-    )
-    response = await model.generate_content_async(
-        prompt,
-        generation_config=genai.types.GenerationConfig(
-            temperature=0.1,
-            max_output_tokens=4096,
-        ),
-    )
-
-    answer_text = response.text.strip()
+    if settings.llm_provider == "ollama":
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            ollama_response = await client.post(
+                f"{settings.ollama_base_url}/api/chat",
+                json={
+                    "model": settings.ollama_model,
+                    "messages": [
+                        {"role": "system", "content": ANSWER_SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "stream": False,
+                    "options": {"temperature": 0.1},
+                },
+            )
+            ollama_response.raise_for_status()
+            answer_text = ollama_response.json()["message"]["content"].strip()
+    else:
+        model = genai.GenerativeModel(
+            model_name=settings.gemini_model,
+            system_instruction=ANSWER_SYSTEM_PROMPT,
+        )
+        response = await model.generate_content_async(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.1,
+                max_output_tokens=4096,
+            ),
+        )
+        answer_text = response.text.strip()
 
     # Build source citations from vector chunks
     sources = []
