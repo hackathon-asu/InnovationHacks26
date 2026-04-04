@@ -81,7 +81,7 @@ class Policy(Base):
     versions: Mapped[list["PolicyVersion"]] = relationship("PolicyVersion", back_populates="policy", cascade="all, delete-orphan")
     drug_coverages: Mapped[list["DrugCoverage"]] = relationship("DrugCoverage", back_populates="policy", cascade="all, delete-orphan")
     chunks: Mapped[list["DocumentChunk"]] = relationship("DocumentChunk", back_populates="policy", cascade="all, delete-orphan")
-    audit_entries: Mapped[list["AuditLog"]] = relationship("AuditLog", back_populates="policy")
+    audit_entries: Mapped[list["AuditLog"]] = relationship("AuditLog", back_populates="policy", cascade="all, delete-orphan")
 
 
 class PolicyVersion(Base):
@@ -283,7 +283,7 @@ class AuditLog(Base):
     __tablename__ = "audit_log"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    policy_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("policies.id"))
+    policy_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("policies.id", ondelete="CASCADE"))
     event_type: Mapped[str] = mapped_column(String(64))      # created|updated|deleted
     file_hash: Mapped[str] = mapped_column(String(64))
     diff_summary: Mapped[Optional[str]] = mapped_column(Text)

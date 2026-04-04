@@ -12,6 +12,7 @@ Stages:
   8. index          → pgvector with HNSW index + metadata filters
 """
 
+import asyncio
 import uuid
 from pathlib import Path
 
@@ -87,11 +88,11 @@ async def run_ingestion_pipeline(policy_id: uuid.UUID, file_path: Path):
     try:
         # ── Stage 1: Parse (Docling → Marker → pypdf) ────────────────────────
         await _set_status(policy_id, "parsing")
-        parsed = parse_pdf(file_path)
+        parsed = await asyncio.to_thread(parse_pdf, file_path)
 
         # ── Stage 2: NLP pre-extraction ───────────────────────────────────────
         await _set_status(policy_id, "nlp_extracting")
-        nlp_result = run_nlp_extraction(parsed.full_text)
+        nlp_result = await asyncio.to_thread(run_nlp_extraction, parsed.full_text)
 
         # ── Stage 3: Gemini structured extraction (NLP-grounded) ──────────────
         await _set_status(policy_id, "gemini_extracting")
@@ -204,7 +205,7 @@ async def run_ingestion_pipeline(policy_id: uuid.UUID, file_path: Path):
 
         # ── Stage 6: Chunk ────────────────────────────────────────────────────
         await _set_status(policy_id, "chunking")
-        chunks = chunk_document(parsed)
+        chunks = await asyncio.to_thread(chunk_document, parsed)
 
         # ── Stage 7: Embed (Gemini text-embedding-004, batched) ───────────────
         await _set_status(policy_id, "embedding")

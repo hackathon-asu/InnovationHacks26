@@ -19,9 +19,10 @@ Also added vs initial version:
 
 import json
 import re
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 
 import google.generativeai as genai
+from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -179,10 +180,14 @@ def _split_into_sections(text: str, max_chars: int = 120_000) -> list[str]:
     return sections
 
 
+def _is_retryable(exc: BaseException) -> bool:
+    return isinstance(exc, (json.JSONDecodeError, ValueError, ResourceExhausted, ServiceUnavailable))
+
+
 @retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type((json.JSONDecodeError, ValueError)),
+    stop=stop_after_attempt(5),
+    wait=wait_exponential(multiplier=2, min=20, max=120),
+    retry=retry_if_exception(_is_retryable),
 )
 async def _extract_section(model, section_text: str, hint_block: str) -> dict:
     """Extract structured data from a single section of the policy."""

@@ -3,9 +3,11 @@ Embedding service — Gemini text-embedding-004, batched 50/request.
 """
 
 import asyncio
+import time
 from typing import TYPE_CHECKING
 
 import google.generativeai as genai
+from google.api_core.exceptions import ResourceExhausted
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -23,10 +25,21 @@ BATCH_SIZE = 50
 
 
 def _embed_batch(texts: list[str], task_type: str) -> list[list[float]]:
-    return [
-        genai.embed_content(model=EMBED_MODEL, content=t, task_type=task_type)["embedding"]
-        for t in texts
-    ]
+    results = []
+    for t in texts:
+        for attempt in range(5):
+            try:
+                results.append(
+                    genai.embed_content(model=EMBED_MODEL, content=t, task_type=task_type)["embedding"]
+                )
+                break
+            except ResourceExhausted:
+                wait = 20 * (attempt + 1)
+                log.warning("Embed rate limited, retrying", attempt=attempt + 1, wait=wait)
+                time.sleep(wait)
+        else:
+            raise RuntimeError(f"Embedding failed after 5 attempts for text: {t[:50]}")
+    return results
 
 
 async def embed_chunks(chunks: "list[Chunk]") -> list[list[float]]:

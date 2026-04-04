@@ -23,3 +23,16 @@ data/
 # OS
 .DS_Store
 Thumbs.db
+venv/
+backend/venv/
+__pycache__/
+.env
+backend/venv/
+venv/
+__pycache__/
+.env
+backend/venv/
+venv/
+__pycache__/
+node_modules/
+.env

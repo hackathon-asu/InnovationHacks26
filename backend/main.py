@@ -15,6 +15,8 @@ log = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info("Starting AntonRX API", env=settings.environment)
+    settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    log.info("Upload directory ready", path=str(settings.upload_dir))
     await init_db()
     log.info("Database ready — pgvector extension enabled")
     yield

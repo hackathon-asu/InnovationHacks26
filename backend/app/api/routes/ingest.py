@@ -10,8 +10,8 @@ import shutil
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
-from sqlalchemy import select, func
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status, Query
+from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -195,3 +195,39 @@ async def get_policy(policy_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     if not policy:
         raise HTTPException(status_code=404, detail="Policy not found")
     return policy
+
+
+@router.delete("/policies/{policy_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_policy(policy_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """Delete a single policy and all related data."""
+    result = await db.execute(select(Policy).where(Policy.id == policy_id))
+    policy = result.scalar_one_or_none()
+    if not policy:
+        raise HTTPException(status_code=404, detail="Policy not found")
+    await db.delete(policy)
+    await db.commit()
+    # Remove uploaded file if it still exists
+    try:
+        Path(policy.original_file_path).unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+@router.delete("/policies", status_code=status.HTTP_200_OK)
+async def delete_policies_by_status(
+    status_filter: str = Query(..., alias="status"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Bulk-delete policies by status (e.g. ?status=failed)."""
+    result = await db.execute(select(Policy).where(Policy.status == status_filter))
+    policies = result.scalars().all()
+    if not policies:
+        return {"deleted": 0}
+    for policy in policies:
+        await db.delete(policy)
+        try:
+            Path(policy.original_file_path).unlink(missing_ok=True)
+        except Exception:
+            pass
+    await db.commit()
+    return {"deleted": len(policies)}

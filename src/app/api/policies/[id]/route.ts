@@ -14,3 +14,17 @@ export async function GET(
     return Response.json({ error: 'Backend unavailable' }, { status: 503 });
   }
 }
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  try {
+    const res = await fetch(`${FASTAPI}/api/v1/ingest/policies/${id}`, { method: 'DELETE' });
+    if (res.status === 404) return Response.json({ error: 'Policy not found' }, { status: 404 });
+    return new Response(null, { status: 204 });
+  } catch {
+    return Response.json({ error: 'Backend unavailable' }, { status: 503 });
+  }
+}
