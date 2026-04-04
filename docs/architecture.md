@@ -1,99 +1,96 @@
-# Anton RX's Track -- System Architecture
+# Anton RX Track -- System Architecture
 
-## Medical Benefit Drug Policy Tracker
+## Medical Benefit Drug Policy Tracker & Comparison Tool
 
-**Version**: 1.0 | **Date**: 2026-04-04 | **Project**: InnovationHacks26
+**Version**: 2.0 | **Date**: 2026-04-04 | **Project**: InnovationHacks26
 
 ---
 
 ## 1. System Overview
 
-Anton RX's Track ingests medical policy documents from major US health plans, extracts structured drug coverage data using AI, and provides search, comparison, and natural language Q&A across payers.
+Anton RX Track is a **drug coverage tracking and comparison tool**. It ships with a pre-seeded database of real medical policies from major US payers and lets users search drugs, compare coverage across plans, and see what changed between policy versions. Upload and chat are secondary features.
 
 ### 1.1 High-Level Architecture
 
 ```
- +--------------------+     +---------------------+     +-----------------------+
- |  Policy Sources    |     |  Upload Interface   |     |  Scheduled Crawler    |
- |  (PDF / HTML)      |     |  (Drag & Drop)      |     |  (Stretch Goal)       |
- +--------+-----------+     +---------+-----------+     +-----------+-----------+
-          |                           |                             |
-          +---------------------------+-----------------------------+
+                        +-----------------------------+
+                        |      Pre-Seeded Data        |
+                        |   /data/*.pdf (in repo)     |
+                        |   scripts/seed.ts           |
+                        +-------------+---------------+
                                       |
-                              +-------v--------+
-                              |  Vercel Blob   |
-                              |  (PDF Storage) |
-                              +-------+--------+
+                        +-------------v---------------+
+                        |   TypeScript Extraction     |
+                        |                             |
+                        |   pdf-parse (text extract)  |
+                        |   --> Gemini 2.5 Flash      |
+                        |       (structured output)   |
+                        |   --> RxNorm API (normalize) |
+                        +-------------+---------------+
                                       |
-                              +-------v--------+
-                              |  Job Queue     |
-                              |  (Postgres)    |
-                              +-------+--------+
-                                      |
-                      +---------------v----------------+
-                      |  Python Extraction Service     |
-                      |  (FastAPI on Vercel Services)  |
-                      |                                |
-                      |  Docling --> scispaCy + Med7   |
-                      |  --> Regex --> RxNorm API      |
-                      +---------------+----------------+
-                                      |
-                              +-------v--------+
-                              |  LLM Extraction|
-                              |  AI SDK v6     |
-                              |  (Structured   |
-                              |   Output)      |
-                              +-------+--------+
-                                      |
-                     +----------------+----------------+
-                     |                                 |
-              +------v-------+                +--------v--------+
-              |  Neon        |                |  Neon           |
-              |  Postgres    |                |  pgvector       |
-              |  (Structured |                |  (PubMedBERT    |
-              |   Data)      |                |   Embeddings)   |
-              +--------------+                +-----------------+
-                     |                                 |
-                     +----------------+----------------+
+                        +-------------v---------------+
+                        |   Neon Postgres + pgvector   |
+                        |                             |
+                        |   payers / plans / policies |
+                        |   policy_claims (JSONB)     |
+                        |   policy_chunks (embeddings)|
+                        +-------------+---------------+
                                       |
               +-----------------------+-----------------------+
               |                       |                       |
       +-------v-------+      +-------v-------+      +--------v------+
-      |  Drug Search  |      |  Payer        |      |  RAG Chat     |
-      |  & Compare    |      |  Comparison   |      |  Q&A          |
-      |  Matrix       |      |  Views        |      |  Interface    |
+      |  Drug Search   |      |  Comparison   |      |  Change       |
+      |  (name/J-code) |      |  Matrix       |      |  Tracking     |
+      |               |      |  (Drug x Plan)|      |  (diffs)      |
       +---------------+      +---------------+      +---------------+
+              |                       |                       |
+              +-----------------------+-----------------------+
+                                      |
+                        +-------------v---------------+
+                        |   Next.js App (Vercel)      |
+                        |   Dark mode, shadcn/ui      |
+                        +-----------------------------+
+
+  P1 additions:
+    - PDF upload (Vercel Blob) --> extraction pipeline
+    - RAG chat Q&A with cited answers
+    - Policy diff view (side-by-side)
 ```
 
 ### 1.2 Core User Flows
 
-**Upload Policy**: User uploads PDF via drag-and-drop. File stored in Vercel Blob. Background job sends document to Python service for parsing and extraction. Structured data written to Postgres. Chunks embedded and stored in pgvector.
+**Search Drugs (P0)**: User searches by drug name or J-code. Query hits `policy_claims` table with RxCUI normalization. Results show coverage status across all plans.
 
-**Search Drugs**: User searches by drug name, J-code, or ICD-10 code. Structured SQL query against `drug_coverages` table with RxCUI normalization. Results show coverage status across all ingested payers.
+**Compare Across Plans (P0)**: User selects a drug. System builds a Drug x Plan comparison matrix showing coverage status, prior auth, step therapy, quantity limits, and approved diagnoses side by side.
 
-**Compare Across Payers**: User selects a drug. System generates a Drug x Payer comparison matrix showing coverage status, prior auth requirements, step therapy, quantity limits, and approved diagnoses side by side.
+**View Policy Detail (P0)**: User clicks a policy to see extracted coverage claims with provenance -- source excerpt, page number, section name, and confidence score.
 
-**Ask Questions**: User asks a natural language question (e.g., "Does Aetna cover Keytruda for NSCLC?"). Query is embedded with PubMedBERT, relevant policy chunks retrieved via pgvector, and answer generated by LLM with citations.
+**Track Changes (P0)**: User views a timeline of policy version changes. System shows what changed between versions with structured diffs and summaries.
 
-**View Changes** (stretch): System detects policy updates via document hash comparison, generates structured diffs, and surfaces material changes in a timeline feed.
+**Upload Policy (P1)**: User uploads PDF. Text extracted with pdf-parse, sent to Gemini for structured extraction, normalized via RxNorm, stored in Postgres.
+
+**Ask Questions (P1)**: User asks a natural language question. Query embedded with Google gemini-embedding-001, relevant chunks retrieved via pgvector, answer generated by Gemini with citations.
 
 ---
 
 ## 2. Tech Stack
 
-| Layer | Technology | Rationale |
-|---|---|---|
-| Framework | Next.js 16 App Router | Server components, streaming, API routes |
-| UI | shadcn/ui + Geist (dark mode default) | Accessible, composable, fast to build |
-| Database | Neon Postgres + pgvector | Single DB for structured + vector data, serverless |
-| LLM | AI SDK v6 via AI Gateway | `model: 'anthropic/claude-sonnet-4.5'` string format |
-| PDF Storage | Vercel Blob | Managed object storage, integrates with Vercel |
-| Document Parsing | Docling (Python) | 97.9% table accuracy, IBM open source |
-| NER | scispaCy + Med7 (Python) | Biomedical NER, medication extraction |
-| Drug Normalization | RxNorm API (NIH) | Free, standard, maps brand/generic to RxCUI |
-| Embeddings | PubMedBERT (768-dim) | 95.62% medical domain accuracy |
-| Python Service | FastAPI on Vercel Services | Co-deployed with Next.js, shared routing |
-| Deployment | Vercel | Serverless, edge-ready, integrated platform |
+Total cost: **$0**
+
+| Layer | Technology | Cost | Notes |
+|---|---|---|---|
+| Framework | Next.js 16 App Router | Free | Server components, streaming, API routes |
+| UI | shadcn/ui + Geist (dark mode default) | Free | Accessible, composable |
+| Database | Neon Postgres + pgvector | Free tier | 0.5 GB, pgvector included |
+| LLM (primary) | Google Gemini 2.5 Flash | Free | 500 req/day via ai.google.dev |
+| LLM (backup) | Groq Llama 3.3 70B | Free | 6,000 req/day |
+| LLM (fallback) | Ollama local | Free | Unlimited, offline |
+| Embeddings | Google gemini-embedding-001 (768-dim) | Free | Same API key as Gemini |
+| AI SDK | `@ai-sdk/google`, `@ai-sdk/groq` | Free | Direct provider SDKs, no gateway |
+| Drug Normalization | RxNorm API (NIH) | Free | No API key needed |
+| PDF Text Extraction | `pdf-parse` (npm) | Free | Digital PDFs, TypeScript-only |
+| PDF Storage (P1) | Vercel Blob | Free tier | Only needed for upload feature |
+| Deployment | Vercel Hobby | Free | Serverless |
 
 ---
 
@@ -104,57 +101,59 @@ Anton RX's Track ingests medical policy documents from major US health plans, ex
 +-- src/
 |   +-- app/                          # Next.js App Router
 |   |   +-- layout.tsx                # Root layout (dark mode, Geist font)
-|   |   +-- page.tsx                  # Landing/dashboard
-|   |   +-- upload/
-|   |   |   +-- page.tsx              # Policy upload
-|   |   +-- policies/
-|   |   |   +-- page.tsx              # Browse/search policies
-|   |   |   +-- [id]/
-|   |   |       +-- page.tsx          # Policy detail
+|   |   +-- page.tsx                  # Dashboard
 |   |   +-- drugs/
 |   |   |   +-- page.tsx              # Drug search
 |   |   |   +-- [rxcui]/
-|   |   |       +-- page.tsx          # Drug coverage comparison
+|   |   |       +-- page.tsx          # Drug coverage comparison matrix
 |   |   +-- compare/
-|   |   |   +-- page.tsx              # Side-by-side comparison
-|   |   +-- chat/
-|   |   |   +-- page.tsx              # RAG Q&A interface
+|   |   |   +-- page.tsx              # Drug x Plan comparison grid
+|   |   +-- policies/
+|   |   |   +-- page.tsx              # Browse/search policies
+|   |   |   +-- [id]/
+|   |   |       +-- page.tsx          # Policy detail with provenance
 |   |   +-- changes/
-|   |   |   +-- page.tsx              # Policy change feed
+|   |   |   +-- page.tsx              # Policy change timeline
+|   |   +-- chat/                     # P1
+|   |   |   +-- page.tsx              # RAG Q&A interface
+|   |   +-- upload/                   # P1
+|   |   |   +-- page.tsx              # Policy upload
 |   |   +-- api/
-|   |       +-- policies/
-|   |       |   +-- upload/
-|   |       |   |   +-- route.ts      # POST: upload and queue processing
-|   |       |   +-- route.ts          # GET: list/search policies
-|   |       |   +-- [id]/
-|   |       |   |   +-- route.ts      # GET: policy detail
-|   |       |   +-- compare/
-|   |       |       +-- route.ts      # POST: side-by-side comparison
 |   |       +-- drugs/
 |   |       |   +-- search/
 |   |       |   |   +-- route.ts      # GET: drug search
 |   |       |   +-- [rxcui]/
 |   |       |       +-- coverage/
 |   |       |           +-- route.ts  # GET: coverage matrix
-|   |       +-- chat/
-|   |       |   +-- route.ts          # POST: streaming RAG chat
+|   |       +-- compare/
+|   |       |   +-- route.ts          # GET: comparison matrix
+|   |       +-- policies/
+|   |       |   +-- route.ts          # GET: list/search policies
+|   |       |   +-- [id]/
+|   |       |   |   +-- route.ts      # GET: policy detail
+|   |       |   +-- upload/           # P1
+|   |       |       +-- route.ts      # POST: upload and extract
 |   |       +-- changes/
-|   |           +-- route.ts          # GET: recent changes
+|   |       |   +-- route.ts          # GET: recent changes
+|   |       +-- chat/                 # P1
+|   |           +-- route.ts          # POST: streaming RAG chat
 |   +-- lib/
 |   |   +-- db/
 |   |   |   +-- schema.ts            # Drizzle ORM schema
 |   |   |   +-- queries.ts           # Reusable query functions
 |   |   |   +-- index.ts             # DB connection (Neon serverless)
 |   |   +-- ai/
-|   |   |   +-- extraction.ts        # LLM structured extraction (AI SDK v6)
-|   |   |   +-- embeddings.ts        # PubMedBERT embedding generation
-|   |   |   +-- rag.ts               # RAG retrieval + generation pipeline
+|   |   |   +-- extraction.ts        # Gemini structured extraction
+|   |   |   +-- embeddings.ts        # Google gemini-embedding-001
+|   |   |   +-- rag.ts               # RAG retrieval + generation (P1)
 |   |   |   +-- schemas.ts           # Zod schemas for structured output
 |   |   +-- rxnorm/
 |   |   |   +-- client.ts            # RxNorm API client
-|   |   |   +-- normalize.ts         # Drug name normalization logic
+|   |   |   +-- normalize.ts         # Drug name normalization
+|   |   +-- pdf/
+|   |   |   +-- extract.ts           # pdf-parse text extraction
 |   |   +-- comparison/
-|   |   |   +-- matrix.ts            # Drug x Payer comparison builder
+|   |   |   +-- matrix.ts            # Drug x Plan comparison builder
 |   |   |   +-- diff.ts              # Policy version diffing
 |   |   +-- types/
 |   |       +-- policy.ts            # TypeScript interfaces
@@ -162,45 +161,45 @@ Anton RX's Track ingests medical policy documents from major US health plans, ex
 |   |       +-- comparison.ts
 |   +-- components/
 |   |   +-- ui/                       # shadcn/ui components
+|   |   +-- drug/
+|   |   |   +-- coverage-matrix.tsx   # Drug x Plan comparison grid
+|   |   |   +-- drug-search.tsx
 |   |   +-- policy/
 |   |   |   +-- policy-card.tsx
-|   |   |   +-- criteria-tree.tsx     # Nested clinical criteria display
-|   |   |   +-- step-therapy-view.tsx
-|   |   +-- drug/
-|   |   |   +-- coverage-matrix.tsx   # Drug x Payer comparison grid
-|   |   |   +-- drug-search.tsx
-|   |   +-- chat/
-|   |   |   +-- chat-interface.tsx    # useChat + DefaultChatTransport
+|   |   |   +-- claim-detail.tsx      # Extracted claim with provenance
+|   |   +-- changes/
+|   |   |   +-- change-timeline.tsx
+|   |   |   +-- diff-view.tsx
+|   |   +-- chat/                     # P1
+|   |   |   +-- chat-interface.tsx
 |   |   |   +-- message-bubble.tsx
-|   |   +-- upload/
-|   |   |   +-- dropzone.tsx          # Drag-and-drop upload
+|   |   +-- upload/                   # P1
+|   |   |   +-- dropzone.tsx
 |   |   +-- layout/
 |   |       +-- sidebar.tsx
 |   |       +-- header.tsx
 |   +-- hooks/
 |       +-- use-drug-search.ts
-|       +-- use-policy-upload.ts
-+-- python/                           # Python extraction service
-|   +-- main.py                       # FastAPI app entrypoint
-|   +-- pyproject.toml                # Python dependencies
-|   +-- services/
-|   |   +-- parser.py                 # Docling document parsing
-|   |   +-- ner.py                    # scispaCy + Med7 entity extraction
-|   |   +-- section_classifier.py     # Section type classification
-|   +-- models/
-|       +-- entities.py               # Pydantic models for extracted data
+|       +-- use-comparison.ts
++-- data/                             # Pre-seeded policy PDFs
+|   +-- uhc/
+|   +-- aetna/
+|   +-- anthem/
+|   +-- cigna/
+|   +-- humana/
++-- scripts/
+|   +-- seed.ts                       # Seed database from /data PDFs
+|   +-- extract-policy.ts             # Extract single policy (dev tool)
+|   +-- migrate.ts                    # Database migration runner
 +-- tests/
 |   +-- unit/
 |   +-- integration/
 +-- docs/
-|   +-- architecture.md              # This document
+|   +-- architecture.md               # This document
 |   +-- medical-policy-parser-research.md
 +-- config/
-|   +-- drizzle.config.ts            # Drizzle ORM config
-+-- scripts/
-|   +-- seed-payers.ts               # Seed initial payer data
-|   +-- migrate.ts                   # Database migration runner
-+-- vercel.json                       # Vercel Services config
+|   +-- drizzle.config.ts             # Drizzle ORM config
++-- vercel.json
 +-- package.json
 +-- tsconfig.json
 +-- next.config.ts
@@ -210,395 +209,411 @@ Anton RX's Track ingests medical policy documents from major US health plans, ex
 
 ## 4. Data Flow Pipeline
 
-### Stage 1: Upload
+### Primary Flow: Seeding (P0)
 
-User uploads a PDF through the `/upload` page. The file is stored in Vercel Blob via the `@vercel/blob` SDK. A job record is inserted into a `processing_jobs` Postgres table with status `pending` and a reference to the blob URL.
+Pre-seeded policies are the core demo path. The `scripts/seed.ts` script processes PDFs stored in `/data` and populates the database.
 
-```typescript
-// src/app/api/policies/upload/route.ts
-import { put } from '@vercel/blob';
-
-const blob = await put(`policies/${file.name}`, file, { access: 'public' });
-await db.insert(processingJobs).values({
-  blobUrl: blob.url,
-  status: 'pending',
-  payerId: formData.get('payerId'),
-});
+```
+/data/uhc/commercial-jcode-policy-2026.pdf
+    |
+    v
+scripts/seed.ts
+    |
+    +--> pdf-parse: extract text from PDF
+    |    Returns: plain text string
+    |
+    +--> Split text into sections (by headers/page breaks)
+    |
+    +--> For each section:
+    |    |
+    |    +--> Gemini 2.5 Flash: generateText() with Output.object()
+    |    |    Schema: PolicyClaimSchema (Zod)
+    |    |    Returns: typed coverage claims with flat fields + JSONB
+    |    |
+    |    +--> RxNorm API: normalize drug names to RxCUI
+    |         Maps brand <-> generic, validates J-codes
+    |
+    +--> Write to Postgres via Drizzle:
+         - payers, plans (if not exists)
+         - policies (with version tracking)
+         - policy_claims (flat fields + extracted_data JSONB + provenance)
 ```
 
-### Stage 2: Parse
+**Version Tracking During Seeding (P0)**:
 
-The Next.js API route calls the Python extraction service (co-deployed via Vercel Services) at `/extraction/parse`. The Python service downloads the PDF from Vercel Blob and uses Docling to extract structured markdown with section boundaries, tables, and headers.
+To demonstrate "what changed this quarter," the seed script ingests **two versions** of each policy (e.g., Aetna Humira policy from Q4 2025 and Q1 2026). The seeding flow for versioned policies:
 
-```python
-# python/services/parser.py
-from docling.document_converter import DocumentConverter
-
-converter = DocumentConverter()
-result = converter.convert(pdf_path)
-markdown = result.document.export_to_markdown()
-sections = result.document.export_to_dict()  # Structured sections
+```
+For each policy with multiple versions:
+    |
+    +--> Seed v1 (older version):
+    |    - Insert policy record (version: 1)
+    |    - Extract and insert policy_claims
+    |
+    +--> Seed v2 (current version):
+    |    - Insert policy record (version: 2, same policyNumber)
+    |    - Extract and insert policy_claims
+    |
+    +--> Compute diff:
+    |    - Compare v1 and v2 policy_claims by drug (rxcui match)
+    |    - Detect: added/removed drugs, changed coverage_status,
+    |      changed prior_auth, changed step therapy in extractedData
+    |    - Use Gemini with temperature: 0 to generate changeSummary
+    |
+    +--> Insert policy_versions record:
+         - versionNumber, effectiveDate
+         - diffJson: { changes: [{ field, old, new, significance }] }
+         - changeSummary: LLM-generated human-readable summary
 ```
 
-### Stage 3: Extract Entities
+The `/api/changes` endpoint then queries `policy_versions` joined with policies/plans/payers, returning change records with diffs and summaries. The `/changes` page renders these as a timeline.
 
-Two parallel extraction paths run against the parsed content:
+### Secondary Flow: Upload (P1)
 
-**Path A -- Python NER + Regex** (deterministic, fast):
-- scispaCy `en_ner_bc5cdr_md` model extracts drug names and disease mentions
-- Med7 extracts medication details (dosage, form, frequency, route)
-- Regex patterns extract J-codes (`J\d{4}`), ICD-10 codes (`[A-Z]\d{2}\.?\d{0,4}`), and CPT codes (`\d{5}`)
+```
+User uploads PDF via /upload page
+    |
+    +--> Store PDF in Vercel Blob
+    +--> Create processing_jobs record (status: pending)
+    |
+    +--> Same extraction pipeline as seeding:
+         pdf-parse --> Gemini structured output --> RxNorm --> Postgres
+    |
+    +--> Update processing_jobs (status: complete)
+```
 
-**Path B -- LLM Structured Output** (complex criteria):
-- AI SDK v6 `streamObject` with Zod schema extracts step therapy logic, clinical criteria trees, quantity limits, site-of-care requirements, and coverage determinations
-- Uses section-by-section processing for long documents (10+ pages)
+### LLM Extraction Call
 
 ```typescript
 // src/lib/ai/extraction.ts
+import { google } from '@ai-sdk/google';
 import { generateText, Output } from 'ai';
-import { gateway } from 'ai';
-import { MedicalPolicySchema } from './schemas';
+import { PolicyClaimSchema } from './schemas';
 
 const result = await generateText({
-  model: gateway('anthropic/claude-sonnet-4.5'),
-  output: Output.object({ schema: MedicalPolicySchema }),
-  prompt: `Extract structured policy data from this medical policy section.
-           Be precise with codes and criteria. If information is not present,
-           omit the optional field rather than guessing.
+  model: google('gemini-2.5-flash'),
+  output: Output.object({ schema: PolicyClaimSchema }),
+  prompt: `Extract structured drug coverage data from this medical policy section.
+           For each drug mentioned, extract: brand name, generic name, J-code,
+           coverage status, prior auth requirement, step therapy details,
+           quantity limits, and clinical criteria.
+
+           Include the exact source text you based each extraction on.
 
            Section: ${sectionText}`,
 });
 
-const policyData = result.output; // typed object matching MedicalPolicySchema
+const claims = result.output; // typed array matching PolicyClaimSchema
 ```
 
-### Stage 4: Normalize
-
-Extracted drug names are resolved to canonical identifiers via the RxNorm API:
+### PDF Text Extraction
 
 ```typescript
-// src/lib/rxnorm/normalize.ts
-async function normalizeToRxCUI(drugName: string): Promise<string | null> {
-  const res = await fetch(
-    `https://rxnav.nlm.nih.gov/REST/rxcui.json?name=${encodeURIComponent(drugName)}`
-  );
-  const data = await res.json();
-  return data.idGroup?.rxnormId?.[0] ?? null;
+// src/lib/pdf/extract.ts
+import pdf from 'pdf-parse';
+import { readFile } from 'fs/promises';
+
+export async function extractTextFromPdf(pdfPath: string): Promise<string> {
+  const buffer = await readFile(pdfPath);
+  const data = await pdf(buffer);
+  return data.text;
+}
+
+export async function extractTextFromBuffer(buffer: Buffer): Promise<string> {
+  const data = await pdf(buffer);
+  return data.text;
 }
 ```
-
-J-codes and ICD-10 codes are validated against known code sets. Brand names are mapped to generic names (and vice versa) via RxNorm's `allrelated` endpoint.
-
-### Stage 5: Store
-
-Structured data is written to normalized Postgres tables via Drizzle ORM. Policy text is chunked by section (criteria, codes, background), embedded with PubMedBERT, and stored in `policy_chunks` with pgvector.
-
-```typescript
-// Chunking and embedding
-const chunks = splitBySections(parsedDocument);
-for (const chunk of chunks) {
-  const embedding = await generateEmbedding(chunk.text); // PubMedBERT 768-dim
-  await db.insert(policyChunks).values({
-    policyId,
-    chunkIndex: chunk.index,
-    chunkText: chunk.text,
-    sectionType: chunk.sectionType,
-    embedding,
-    metadata: { drugName: chunk.drugName, payerName: chunk.payerName },
-  });
-}
-```
-
-### Stage 6: Query
-
-Two query paths serve different use cases:
-
-**Structured queries**: SQL against normalized tables for exact lookups (drug by RxCUI, J-code, ICD-10 code, payer name). Powers the search and comparison views.
-
-**RAG queries**: User's natural language question is embedded with PubMedBERT, top-k chunks retrieved via cosine similarity in pgvector (filtered by payer/drug metadata), and passed to the LLM for answer generation with citations.
-
-```typescript
-// src/lib/ai/rag.ts
-import { streamText } from 'ai';
-import { gateway } from 'ai/gateway';
-
-const relevantChunks = await db.execute(sql`
-  SELECT chunk_text, metadata, 1 - (embedding <=> ${queryEmbedding}) AS similarity
-  FROM policy_chunks
-  WHERE 1 - (embedding <=> ${queryEmbedding}) > 0.7
-  ORDER BY similarity DESC
-  LIMIT 8
-`);
-
-const response = streamText({
-  model: gateway('anthropic/claude-sonnet-4.5'),
-  system: `You are a medical policy expert. Answer based only on the provided policy excerpts. Cite the specific policy and payer for each claim.`,
-  messages: [
-    { role: 'user', content: buildRAGPrompt(userQuestion, relevantChunks) },
-  ],
-});
-```
-
-### Stage 7: Compare
-
-The comparison matrix is built from structured data in `drug_coverages`, joined across payers:
-
-```sql
-SELECT p.name AS payer, dc.coverage_status, dc.prior_auth_required,
-       array_agg(DISTINCT ci.icd10_code) AS diagnoses,
-       st.step_number AS max_step
-FROM drug_coverages dc
-JOIN policies pol ON dc.policy_id = pol.id
-JOIN payers p ON pol.payer_id = p.id
-LEFT JOIN clinical_criteria cc ON cc.drug_coverage_id = dc.id
-LEFT JOIN criteria_icd_codes ci ON ci.criterion_id = cc.id
-LEFT JOIN step_therapy st ON st.drug_coverage_id = dc.id
-WHERE dc.rxcui = $1 AND pol.status = 'active'
-GROUP BY p.name, dc.coverage_status, dc.prior_auth_required, st.step_number;
-```
-
-### Stage 8: Detect Changes (Stretch Goal)
-
-A scheduled job re-fetches policy source URLs, computes SHA-256 hash of the new document, and compares against stored `source_document_hash`. If changed, the document goes through the full extraction pipeline. A JSON diff is computed between the old and new structured policy objects, and an LLM generates a human-readable change summary classified by significance (breaking, material, minor, cosmetic).
 
 ---
 
 ## 5. Database Schema
 
-Uses Neon Postgres with the `pgvector` extension enabled. All tables use UUID primary keys.
+Neon Postgres with `pgvector` extension. Drizzle ORM for all access.
 
-```sql
--- Enable extensions
-CREATE EXTENSION IF NOT EXISTS "pgvector";
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+### Drizzle Schema
 
--- Payer / Health Plan
-CREATE TABLE payers (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name TEXT NOT NULL,                -- "Aetna", "UnitedHealthcare"
-    plan_types TEXT[],                 -- ["Commercial", "Medicare", "Medicaid"]
-    website_url TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
+```typescript
+// src/lib/db/schema.ts
+import {
+  pgTable, uuid, text, boolean, integer, real,
+  timestamp, date, jsonb, index, uniqueIndex,
+} from 'drizzle-orm/pg-core';
+import { vector } from 'drizzle-orm/pg-core'; // pgvector
 
--- Medical Policy Document
-CREATE TABLE policies (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    payer_id UUID REFERENCES payers(id),
-    policy_number TEXT NOT NULL,
-    title TEXT NOT NULL,
-    effective_date DATE NOT NULL,
-    last_reviewed DATE,
-    next_review_date DATE,
-    status TEXT CHECK (status IN ('active', 'archived', 'draft')),
-    source_url TEXT,
-    blob_url TEXT,                     -- Vercel Blob URL for original PDF
-    source_document_hash TEXT,         -- SHA-256 for change detection
-    raw_text TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(payer_id, policy_number, effective_date)
-);
+// ---- Payers ----
 
--- Policy Version History
-CREATE TABLE policy_versions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    policy_id UUID REFERENCES policies(id),
-    version_number INTEGER NOT NULL,
-    effective_date DATE NOT NULL,
-    change_summary TEXT,               -- LLM-generated
-    diff_json JSONB,                   -- Structured diff
-    source_document_hash TEXT,
-    raw_text TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
+export const payers = pgTable('payers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),                    // "UnitedHealthcare", "Aetna"
+  websiteUrl: text('website_url'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
 
--- Drug Coverage Determination
-CREATE TABLE drug_coverages (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    policy_id UUID REFERENCES policies(id),
-    drug_brand_name TEXT,
-    drug_generic_name TEXT,
-    rxcui TEXT,                        -- RxNorm concept ID
-    j_code TEXT,
-    ndc_codes TEXT[],
-    coverage_status TEXT CHECK (coverage_status IN (
-        'covered', 'not_covered', 'covered_with_criteria',
-        'experimental', 'not_addressed'
-    )),
-    prior_auth_required BOOLEAN DEFAULT FALSE,
-    plan_types TEXT[],
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
+// ---- Plans (NEW: between payer and policy) ----
 
--- Clinical Criteria (Tree Structure via parent_id)
-CREATE TABLE clinical_criteria (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    drug_coverage_id UUID REFERENCES drug_coverages(id),
-    parent_id UUID REFERENCES clinical_criteria(id),
-    criterion_type TEXT CHECK (criterion_type IN (
-        'diagnosis', 'step_therapy', 'lab_result', 'age',
-        'gender', 'provider_specialty', 'site_of_care',
-        'quantity_limit', 'duration_limit', 'documentation',
-        'comorbidity', 'contraindication', 'other'
-    )),
-    logic_operator TEXT CHECK (logic_operator IN ('AND', 'OR', 'NOT')),
-    description TEXT NOT NULL,
-    sort_order INTEGER DEFAULT 0,
-    required BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
+export const plans = pgTable('plans', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  payerId: uuid('payer_id').references(() => payers.id).notNull(),
+  name: text('name').notNull(),                    // "UHC Choice Plus PPO"
+  lineOfBusiness: text('line_of_business').notNull(), // "Commercial", "Medicare Advantage", "Medicaid"
+  state: text('state'),                            // "TX", "FL", null for national
+  productType: text('product_type'),               // "PPO", "HMO", "EPO", "POS"
+  createdAt: timestamp('created_at').defaultNow(),
+});
 
--- ICD-10 Codes Linked to Criteria
-CREATE TABLE criteria_icd_codes (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    criterion_id UUID REFERENCES clinical_criteria(id),
-    icd10_code TEXT NOT NULL,
-    icd10_description TEXT,
-    code_range_start TEXT,
-    code_range_end TEXT
-);
+// ---- Policies ----
 
--- Step Therapy Requirements
-CREATE TABLE step_therapy (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    drug_coverage_id UUID REFERENCES drug_coverages(id),
-    step_number INTEGER NOT NULL,
-    drug_or_class TEXT NOT NULL,
-    min_duration TEXT,
-    min_dose TEXT,
-    failure_definition TEXT,
-    contraindication_bypass BOOLEAN DEFAULT FALSE,
-    sort_order INTEGER DEFAULT 0
-);
+export const policies = pgTable('policies', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  planId: uuid('plan_id').references(() => plans.id).notNull(),
+  policyNumber: text('policy_number').notNull(),
+  title: text('title').notNull(),
+  effectiveDate: date('effective_date').notNull(),
+  lastReviewed: date('last_reviewed'),
+  nextReviewDate: date('next_review_date'),
+  version: integer('version').default(1),
+  status: text('status').notNull().default('active'), // active, archived, draft
+  sourceUrl: text('source_url'),
+  sourceDocumentHash: text('source_document_hash'),   // SHA-256
+  rawText: text('raw_text'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  planStatusIdx: index('idx_policies_plan_status').on(table.planId, table.status),
+  policyNumberIdx: uniqueIndex('idx_policies_unique').on(table.planId, table.policyNumber, table.effectiveDate),
+}));
 
--- Quantity Limits
-CREATE TABLE quantity_limits (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    drug_coverage_id UUID REFERENCES drug_coverages(id),
-    quantity NUMERIC NOT NULL,
-    unit TEXT NOT NULL,
-    period TEXT NOT NULL,
-    max_daily_dose TEXT,
-    notes TEXT
-);
+// ---- Policy Versions (for change tracking) ----
 
--- Site of Care Requirements
-CREATE TABLE site_of_care (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    drug_coverage_id UUID REFERENCES drug_coverages(id),
-    preferred_site TEXT,
-    allowed_sites TEXT[],
-    restricted_sites TEXT[],
-    exception_criteria TEXT
-);
+export const policyVersions = pgTable('policy_versions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  policyId: uuid('policy_id').references(() => policies.id).notNull(),
+  versionNumber: integer('version_number').notNull(),
+  effectiveDate: date('effective_date').notNull(),
+  changeSummary: text('change_summary'),           // LLM-generated
+  diffJson: jsonb('diff_json'),                    // structured diff
+  sourceDocumentHash: text('source_document_hash'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
 
--- Provider Specialty Requirements
-CREATE TABLE provider_requirements (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    drug_coverage_id UUID REFERENCES drug_coverages(id),
-    required_specialty TEXT,
-    prescriber_type TEXT,
-    consultation_required BOOLEAN DEFAULT FALSE,
-    notes TEXT
-);
+// ---- Policy Claims (flat fields + JSONB + provenance) ----
 
--- Processing Jobs (upload queue)
-CREATE TABLE processing_jobs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    blob_url TEXT NOT NULL,
-    payer_id UUID REFERENCES payers(id),
-    status TEXT CHECK (status IN ('pending', 'parsing', 'extracting', 'normalizing', 'complete', 'failed')),
-    error_message TEXT,
-    policy_id UUID REFERENCES policies(id),  -- Set after successful processing
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    completed_at TIMESTAMPTZ
-);
+export const policyClaims = pgTable('policy_claims', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  policyId: uuid('policy_id').references(() => policies.id).notNull(),
 
--- Policy Chunks with Embeddings (pgvector)
-CREATE TABLE policy_chunks (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    policy_id UUID REFERENCES policies(id),
-    chunk_index INTEGER NOT NULL,
-    chunk_text TEXT NOT NULL,
-    section_type TEXT,                 -- "criteria", "codes", "background"
-    embedding vector(768),             -- PubMedBERT dimensions
-    metadata JSONB,                    -- { drugName, payerName, jCode, ... }
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
+  // Flat queryable fields
+  drugBrandName: text('drug_brand_name'),
+  drugGenericName: text('drug_generic_name'),
+  rxcui: text('rxcui'),
+  jCode: text('j_code'),
+  coverageStatus: text('coverage_status'),         // covered, not_covered, covered_with_criteria, etc.
+  priorAuthRequired: boolean('prior_auth_required'),
 
--- Indexes
-CREATE INDEX idx_policy_chunks_embedding ON policy_chunks
-    USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
-CREATE INDEX idx_drug_coverages_rxcui ON drug_coverages(rxcui);
-CREATE INDEX idx_drug_coverages_jcode ON drug_coverages(j_code);
-CREATE INDEX idx_criteria_icd_codes ON criteria_icd_codes(icd10_code);
-CREATE INDEX idx_policies_payer ON policies(payer_id, status);
-CREATE INDEX idx_processing_jobs_status ON processing_jobs(status);
-CREATE INDEX idx_drug_coverages_policy ON drug_coverages(policy_id);
+  // Full structured extraction as JSONB
+  extractedData: jsonb('extracted_data'),           // step therapy, criteria, limits, site of care, etc.
+
+  // Provenance
+  sourceExcerpt: text('source_excerpt'),           // exact quoted text from the document
+  sourcePage: integer('source_page'),              // page number in source PDF
+  sourceSection: text('source_section'),           // section name in source document
+  confidence: real('confidence'),                  // LLM confidence score 0-1
+
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  rxcuiIdx: index('idx_policy_claims_rxcui').on(table.rxcui),
+  jCodeIdx: index('idx_policy_claims_jcode').on(table.jCode),
+  policyIdx: index('idx_policy_claims_policy').on(table.policyId),
+  brandNameIdx: index('idx_policy_claims_brand').on(table.drugBrandName),
+}));
+
+// ---- Policy Chunks with Embeddings ----
+
+export const policyChunks = pgTable('policy_chunks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  policyId: uuid('policy_id').references(() => policies.id).notNull(),
+  chunkIndex: integer('chunk_index').notNull(),
+  chunkText: text('chunk_text').notNull(),
+  sectionType: text('section_type'),               // "criteria", "codes", "background"
+  embedding: vector('embedding', { dimensions: 768 }), // Google gemini-embedding-001
+  metadata: jsonb('metadata'),                     // { drugName, planName, jCode, ... }
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  embeddingIdx: index('idx_policy_chunks_embedding')
+    .using('ivfflat', table.embedding)
+    .with({ lists: 100 }),
+}));
+
+// ---- Processing Jobs (for P1 upload) ----
+
+export const processingJobs = pgTable('processing_jobs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  blobUrl: text('blob_url').notNull(),
+  planId: uuid('plan_id').references(() => plans.id),
+  status: text('status').notNull().default('pending'), // pending, extracting, normalizing, complete, failed
+  errorMessage: text('error_message'),
+  policyId: uuid('policy_id').references(() => policies.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  completedAt: timestamp('completed_at'),
+}, (table) => ({
+  statusIdx: index('idx_processing_jobs_status').on(table.status),
+}));
+```
+
+### Zod Schema for LLM Extraction
+
+```typescript
+// src/lib/ai/schemas.ts
+import { z } from 'zod';
+
+export const PolicyClaimSchema = z.object({
+  claims: z.array(z.object({
+    drugBrandName: z.string().optional(),
+    drugGenericName: z.string().optional(),
+    jCode: z.string().optional(),
+    coverageStatus: z.enum([
+      'covered', 'not_covered', 'covered_with_criteria',
+      'experimental', 'not_addressed',
+    ]),
+    priorAuthRequired: z.boolean(),
+    extractedData: z.object({
+      stepTherapy: z.array(z.object({
+        stepNumber: z.number(),
+        drugOrClass: z.string(),
+        minDuration: z.string().optional(),
+        failureDefinition: z.string().optional(),
+      })).optional(),
+      quantityLimits: z.object({
+        quantity: z.number(),
+        unit: z.string(),
+        period: z.string(),
+      }).optional(),
+      clinicalCriteria: z.array(z.object({
+        type: z.string(),
+        description: z.string(),
+        icdCodes: z.array(z.string()).optional(),
+      })).optional(),
+      siteOfCare: z.string().optional(),
+      ageRestrictions: z.string().optional(),
+      additionalNotes: z.string().optional(),
+    }),
+    sourceExcerpt: z.string(),
+    sourcePage: z.number().optional(),
+    sourceSection: z.string().optional(),
+    confidence: z.number().min(0).max(1),
+  })),
+});
 ```
 
 ---
 
 ## 6. API Design
 
-All API routes live under `src/app/api/` using Next.js App Router route handlers.
+All API routes live under `src/app/api/` using Next.js App Router route handlers. Comparison and tracking endpoints are primary.
 
-### 6.1 Policy Endpoints
-
-**`POST /api/policies/upload`**
-- Accepts `multipart/form-data` with PDF file and `payerId`
-- Stores PDF in Vercel Blob, creates processing job
-- Returns `{ jobId, status: 'pending' }`
-
-**`GET /api/policies`**
-- Query params: `payerId`, `search` (title/drug name), `status`, `page`, `limit`
-- Returns paginated list of policies with payer info
-
-**`GET /api/policies/[id]`**
-- Returns full policy detail: metadata, all drug coverages with nested criteria, step therapy, quantity limits, codes
-
-**`POST /api/policies/compare`**
-- Body: `{ policyIds: [id1, id2] }`
-- Returns side-by-side structured comparison of two policies
-
-### 6.2 Drug Endpoints
+### 6.1 Drug Endpoints
 
 **`GET /api/drugs/search`**
-- Query params: `q` (name, J-code, or ICD-10), `limit`
-- Searches `drug_coverages` table with RxNorm normalization
-- Returns matching drugs with coverage summary across payers
+- Query params: `q` (drug name or J-code), `limit`
+- Searches `policy_claims` table with RxNorm normalization
+- Returns matching drugs with coverage summary across plans
 
 **`GET /api/drugs/[rxcui]/coverage`**
-- Returns coverage comparison matrix: all payers that have a policy covering this RxCUI
-- Includes coverage status, prior auth, step therapy count, quantity limits, approved diagnoses
+- Returns coverage comparison matrix: all plans that have a policy covering this RxCUI
+- Includes coverage status, prior auth, step therapy, quantity limits
+- Joins through `policy_claims` -> `policies` -> `plans` -> `payers`
 
-### 6.3 Chat Endpoint
+### 6.2 Comparison Endpoint
+
+**`GET /api/compare`**
+- Query params: `drug` (rxcui or name), `plans` (comma-separated plan IDs, optional)
+- Builds the Drug x Plan comparison grid
+- Returns structured matrix data
+
+```typescript
+// src/app/api/compare/route.ts
+import { db } from '@/lib/db';
+import { policyClaims, policies, plans, payers } from '@/lib/db/schema';
+import { eq, and } from 'drizzle-orm';
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const rxcui = searchParams.get('drug');
+
+  const results = await db
+    .select({
+      payerName: payers.name,
+      planName: plans.name,
+      lineOfBusiness: plans.lineOfBusiness,
+      state: plans.state,
+      productType: plans.productType,
+      coverageStatus: policyClaims.coverageStatus,
+      priorAuth: policyClaims.priorAuthRequired,
+      extractedData: policyClaims.extractedData,
+      sourceExcerpt: policyClaims.sourceExcerpt,
+      confidence: policyClaims.confidence,
+      policyNumber: policies.policyNumber,
+      effectiveDate: policies.effectiveDate,
+    })
+    .from(policyClaims)
+    .innerJoin(policies, eq(policyClaims.policyId, policies.id))
+    .innerJoin(plans, eq(policies.planId, plans.id))
+    .innerJoin(payers, eq(plans.payerId, payers.id))
+    .where(and(
+      eq(policyClaims.rxcui, rxcui),
+      eq(policies.status, 'active'),
+    ));
+
+  return Response.json({ drug: rxcui, comparisons: results });
+}
+```
+
+### 6.3 Policy Endpoints
+
+**`GET /api/policies`**
+- Query params: `planId`, `search` (title/drug name), `status`, `page`, `limit`
+- Returns paginated list of policies with plan and payer info
+
+**`GET /api/policies/[id]`**
+- Returns full policy detail: metadata, all policy claims with extracted data and provenance
+
+### 6.4 Changes Endpoint
+
+**`GET /api/changes`**
+- Query params: `payerId`, `drugName`, `since` (ISO date)
+- Returns recent policy version changes with diffs and summaries
+- Joins `policy_versions` → `policies` → `plans` → `payers`
+- Each change includes: `changeSummary`, `diffJson` (field-level changes with significance), plan name, payer name, effective dates for both versions
+- Response shape: `{ changes: [{ payer, plan, policy, versionFrom, versionTo, effectiveDate, changeSummary, diffs: [{ field, old, new, significance }] }] }`
+
+### 6.5 Chat Endpoint (P1)
 
 **`POST /api/chat`**
-- Uses AI SDK v6 `streamText` with `useChat` / `DefaultChatTransport` on the client
-- Body: standard chat messages array
+- Uses AI SDK `streamText` with `useChat` / `DefaultChatTransport` on client
 - Retrieves relevant policy chunks via pgvector, constructs RAG prompt, streams response
 
 ```typescript
 // src/app/api/chat/route.ts
+import { google } from '@ai-sdk/google';
 import { streamText } from 'ai';
-import { gateway } from 'ai/gateway';
 
 export async function POST(req: Request) {
   const { messages } = await req.json();
   const lastMessage = messages[messages.length - 1].content;
 
-  const queryEmbedding = await generatePubMedBERTEmbedding(lastMessage);
+  const queryEmbedding = await generateEmbedding(lastMessage);
   const relevantChunks = await retrieveChunks(queryEmbedding);
 
   const result = streamText({
-    model: gateway('anthropic/claude-sonnet-4.5'),
-    system: `You are a medical policy analyst. Answer questions about drug coverage policies using only the provided context. Always cite the payer name, policy number, and effective date.`,
+    model: google('gemini-2.5-flash'),
+    system: `You are a medical policy analyst. Answer questions about drug coverage
+             policies using only the provided context. Always cite the payer name,
+             plan name, policy number, and effective date.`,
     messages: [
       ...messages.slice(0, -1),
       {
         role: 'user',
-        content: `Context:\n${relevantChunks.map(c => c.chunk_text).join('\n---\n')}\n\nQuestion: ${lastMessage}`,
+        content: `Context:\n${relevantChunks.map(c => c.chunkText).join('\n---\n')}\n\nQuestion: ${lastMessage}`,
       },
     ],
   });
@@ -607,31 +622,37 @@ export async function POST(req: Request) {
 }
 ```
 
-### 6.4 Changes Endpoint
+### 6.6 Upload Endpoint (P1)
 
-**`GET /api/changes`**
-- Query params: `payerId`, `drugName`, `since` (ISO date), `significance`
-- Returns recent policy changes with diffs and LLM-generated summaries
+**`POST /api/policies/upload`**
+- Accepts `multipart/form-data` with PDF file and `planId`
+- Stores PDF in Vercel Blob, creates processing job, runs extraction pipeline
+- Returns `{ jobId, status: 'pending' }`
+
+### 6.7 Dashboard Stats
+
+**`GET /api/stats`**
+- Returns aggregate counts: total policies, total drugs tracked, total plans, recent changes
 
 ---
 
 ## 7. Frontend Pages
 
-All pages use dark mode by default via the root layout. UI built with shadcn/ui components and Geist font.
+All pages use dark mode by default. UI built with shadcn/ui and Geist font.
 
-| Route | Purpose | Key Components |
-|---|---|---|
-| `/` | Dashboard with ingested policy counts, recent changes, quick search | Stats cards, recent activity feed, search bar |
-| `/upload` | Drag-and-drop PDF upload with payer selection | Dropzone, payer selector, upload progress, job status |
-| `/policies` | Browse/search policies by payer, drug, or keyword | Filterable data table, payer filter chips, search input |
-| `/policies/[id]` | Policy detail with all extracted data | Criteria tree component, step therapy visualization, code badges |
-| `/drugs` | Drug search by name, J-code, or ICD-10 | Search input with autocomplete, results grid |
-| `/drugs/[rxcui]` | Drug coverage comparison matrix across all payers | Coverage matrix grid (rows = payers, columns = criteria dimensions) |
-| `/compare` | Side-by-side policy comparison | Dual-pane layout with diff highlighting |
-| `/chat` | AI Q&A interface for natural language policy questions | Chat UI via `useChat` + `DefaultChatTransport`, citation cards |
-| `/changes` | Policy change timeline/feed | Timeline component, significance badges, expandable diffs |
+| Route | Priority | Purpose | Key Components |
+|---|---|---|---|
+| `/` | P0 | Dashboard: stats, recent changes, quick search | Stats cards, activity feed, search bar |
+| `/drugs` | P0 | Drug search by name or J-code | Search input with autocomplete, results grid |
+| `/drugs/[rxcui]` | P0 | Drug coverage matrix across plans | Coverage matrix (rows=plans, cols=criteria) |
+| `/compare` | P0 | Drug x Plan comparison grid | Multi-drug, multi-plan comparison table |
+| `/policies` | P0 | Browse/search policies by payer, plan, drug | Filterable data table, payer/plan filter chips |
+| `/policies/[id]` | P0 | Policy detail with extracted claims + provenance | Claim cards with source excerpts, confidence badges |
+| `/changes` | P0 | Policy change timeline | Timeline component, diff summaries, version badges |
+| `/chat` | P1 | AI Q&A for natural language policy questions | Chat UI via `useChat`, citation cards |
+| `/upload` | P1 | Drag-and-drop PDF upload with plan selection | Dropzone, plan selector, upload progress |
 
-### 7.1 Chat Client Integration
+### Chat Client (P1)
 
 ```typescript
 // src/components/chat/chat-interface.tsx
@@ -639,385 +660,293 @@ All pages use dark mode by default via the root layout. UI built with shadcn/ui 
 
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
-import { useState } from 'react';
 
 export function ChatInterface() {
-  const [input, setInput] = useState('');
-  const { messages, sendMessage } = useChat({
+  const { messages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({ api: '/api/chat' }),
   });
 
-  const onSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    sendMessage({ text: input });
-    setInput('');
-  };
-
-  return (
-    // Chat UI with message list, input form using onSubmit, input field with setInput
-  );
+  // Chat UI with message list, input form, citation rendering
 }
 ```
 
 ---
 
-## 8. AI Pipeline Architecture: Python and TypeScript Integration
+## 8. AI Extraction Pipeline
 
-The core architectural challenge is that the best document parsing (Docling) and biomedical NER (scispaCy, Med7) tools are Python-only, while the rest of the application is Next.js/TypeScript.
+The entire extraction pipeline is TypeScript. No Python dependencies.
 
-### 8.1 Options Evaluated
+### 8.1 Pipeline Steps
 
-**Option A: Vercel Services (FastAPI as a co-deployed service)**
-- Python FastAPI app deployed alongside Next.js in a single Vercel project
-- Configured via `vercel.json` `experimentalServices`
-- Shared domain, automatic routing by path prefix
-- Vercel auto-generates `EXTRACTION_URL` env var for service-to-service calls
-- Limitation: Vercel Services is in beta; Python services have a 900s max duration
+```
+PDF (digital) --> pdf-parse --> plain text
+    |
+    v
+Split into sections (by headers, page breaks, ~2000 token chunks)
+    |
+    v
+For each section:
+    |
+    +--> Gemini 2.5 Flash: generateText() with Output.object()
+    |    Input: section text + PolicyClaimSchema (Zod)
+    |    Output: structured claims with provenance
+    |    IMPORTANT: temperature: 0 for deterministic extraction
+    |
+    +--> RxNorm API: POST drug names to /REST/rxcui.json
+    |    Maps brand <-> generic, returns RxCUI
+    |    Validates J-codes via /REST/rxcui.json?idtype=JC
+    |
+    +--> (P1 only) Google gemini-embedding-001: embed() section text
+         Returns: 768-dim vector for RAG chat
+```
 
-**Option B: Vercel Python Runtime (serverless functions)**
-- Python files in the project handled by Vercel's Python runtime
-- Simpler deployment but limited to function-level granularity
-- Harder to manage Python dependencies (Docling is heavy)
-- 300s max duration on Pro plan
+### 8.2 LLM Provider Chain
 
-**Option C: External Python Service (Railway/Render/Fly.io)**
-- Full control over Python environment and dependencies
-- Can run GPU-accelerated models if needed
-- Adds network latency and operational complexity
-- Requires separate deployment pipeline and CORS configuration
+Direct provider SDKs with fallback (no AI Gateway):
 
-### 8.2 Recommendation: Option A (Vercel Services)
+```typescript
+// src/lib/ai/extraction.ts
+import { google } from '@ai-sdk/google';
+import { generateText, Output } from 'ai';
 
-For a hackathon, Option A provides the best balance of simplicity and capability:
-
-- Single `vercel deploy` deploys both services
-- No CORS issues (same domain)
-- No separate infrastructure to manage
-- `vercel dev -L` runs both services locally during development
-- If Docling's dependencies prove too heavy for Vercel, fall back to Option C with Railway as the escape hatch
-
-### 8.3 Vercel Services Configuration
-
-```json
-// vercel.json
-{
-  "experimentalServices": {
-    "web": {
-      "entrypoint": "src",
-      "routePrefix": "/"
-    },
-    "extraction": {
-      "entrypoint": "python/main.py",
-      "routePrefix": "/extraction",
-      "memory": 3008,
-      "maxDuration": 300
-    }
-  }
+// Primary: Gemini 2.5 Flash (free 500 req/day)
+async function extractWithGemini(sectionText: string) {
+  return generateText({
+    model: google('gemini-2.5-flash'),
+    temperature: 0, // Deterministic — critical for consistent change tracking
+    output: Output.object({ schema: PolicyClaimSchema }),
+    prompt: `Extract structured drug coverage data from this medical policy section.
+             For each drug, include the exact source text you based the extraction on.
+             Section: ${sectionText}`,
+  });
 }
 ```
 
-### 8.4 Python Service API
+```typescript
+// Backup: Groq Llama 3.3 70B (free 6,000 req/day)
+import { groq } from '@ai-sdk/groq';
 
-The FastAPI service exposes two endpoints:
-
-**`POST /parse`** -- Parse a PDF document
-- Input: `{ blob_url: string }`
-- Downloads PDF from Vercel Blob, runs Docling
-- Returns: structured sections as JSON
-
-**`POST /extract-entities`** -- Extract medical entities from text
-- Input: `{ text: string, section_type: string }`
-- Runs scispaCy + Med7 NER, regex extraction
-- Returns: `{ drugs: [], icd_codes: [], j_codes: [], cpt_codes: [], medications: [] }`
-
-```python
-# python/main.py
-from fastapi import FastAPI
-from services.parser import parse_document
-from services.ner import extract_entities
-
-app = FastAPI()
-
-@app.post("/parse")
-async def parse(request: ParseRequest):
-    sections = await parse_document(request.blob_url)
-    return {"sections": sections}
-
-@app.post("/extract-entities")
-async def extract(request: ExtractRequest):
-    entities = extract_entities(request.text, request.section_type)
-    return entities
+async function extractWithGroq(sectionText: string) {
+  return generateText({
+    model: groq('llama-3.3-70b-versatile'),
+    output: Output.object({ schema: PolicyClaimSchema }),
+    prompt: `Extract structured drug coverage data...`,
+  });
+}
 ```
 
-### 8.5 Orchestration Flow
+```typescript
+// Fallback: Ollama local (unlimited)
+import { createOpenAI } from '@ai-sdk/openai';
 
-The Next.js API route orchestrates the full pipeline:
+const ollama = createOpenAI({ baseURL: 'http://localhost:11434/v1' });
 
+async function extractWithOllama(sectionText: string) {
+  return generateText({
+    model: ollama('llama3.1'),
+    output: Output.object({ schema: PolicyClaimSchema }),
+    prompt: `Extract structured drug coverage data...`,
+  });
+}
 ```
-Next.js: POST /api/policies/upload
-    |
-    +--> Store PDF in Vercel Blob
-    +--> Create processing_jobs record (status: pending)
-    |
-    +--> Call Python: POST /extraction/parse { blob_url }
-    |    Returns: structured sections
-    |
-    +--> Call Python: POST /extraction/extract-entities { text }
-    |    Returns: drugs, codes, medications
-    |
-    +--> Call AI SDK: generateText() with Output.object({ schema: MedicalPolicySchema })
-    |    Returns: step therapy, clinical criteria, coverage decisions
-    |
-    +--> Call RxNorm API: normalize drug names to RxCUI
-    |
-    +--> Write all structured data to Postgres
-    +--> Chunk text, embed with PubMedBERT, store in pgvector
-    +--> Update processing_jobs (status: complete)
+
+### 8.3 Embeddings
+
+```typescript
+// src/lib/ai/embeddings.ts
+import { google } from '@ai-sdk/google';
+import { embed } from 'ai';
+
+export async function generateEmbedding(text: string): Promise<number[]> {
+  const { embedding } = await embed({
+    model: google.textEmbeddingModel('gemini-embedding-001'),
+    value: text,
+  });
+  return embedding;
+}
 ```
+
+### 8.4 RxNorm Normalization
+
+```typescript
+// src/lib/rxnorm/normalize.ts
+const RXNORM_BASE = 'https://rxnav.nlm.nih.gov/REST';
+
+export async function normalizeToRxCUI(drugName: string): Promise<{
+  rxcui: string | null;
+  brandName: string | null;
+  genericName: string | null;
+}> {
+  const res = await fetch(
+    `${RXNORM_BASE}/rxcui.json?name=${encodeURIComponent(drugName)}`
+  );
+  const data = await res.json();
+  const rxcui = data.idGroup?.rxnormId?.[0] ?? null;
+
+  if (!rxcui) return { rxcui: null, brandName: null, genericName: null };
+
+  // Get brand/generic mapping
+  const relatedRes = await fetch(`${RXNORM_BASE}/rxcui/${rxcui}/allrelated.json`);
+  const related = await relatedRes.json();
+  // Parse brand and generic names from conceptGroup array
+  // ...
+
+  return { rxcui, brandName, genericName };
+}
+```
+
+### 8.5 Trade-offs
+
+| Aspect | TypeScript pipeline (MVP) | Python pipeline (P2) |
+|---|---|---|
+| Table extraction | Basic (pdf-parse) | Excellent (Docling, 97.9%) |
+| NER accuracy | Good (LLM structured output) | Better (scispaCy + Med7) |
+| Setup complexity | Zero (npm install) | High (Python env, models) |
+| Speed | Fast (~2s per section) | Slower (model loading) |
+| Scanned PDFs | Not supported | Supported (OCR via Surya) |
+
+For a hackathon with digital PDFs from major payer websites, the TypeScript pipeline is sufficient. The LLM handles entity extraction well enough when given structured output schemas.
 
 ---
 
 ## 9. Key Architectural Decisions
 
-### ADR-001: Docling as Primary Document Parser
+### ADR-001: Tracker-First, Not Upload-First
 
-**Context**: Medical policy PDFs contain complex tables (drug lists, code tables, criteria matrices) that are critical to parse accurately.
+**Context**: The product solves "which drugs are covered by which plans" and "what changed this quarter." Upload is a mechanism, not the core value.
 
-**Decision**: Use Docling as the primary parser with Marker as OCR fallback.
-
-**Rationale**:
-- 97.9% accuracy on table extraction (best in class, 2025 benchmarks)
-- Exports to structured JSON with section boundaries
-- Open source (MIT), backed by IBM
-- Native HTML support for web-published policies
-- Marker provides superior OCR for scanned documents via Surya engine
-
-**Trade-off**: Both are Python-only, requiring a separate service for a TypeScript-first application.
-
-### ADR-002: PubMedBERT over General-Purpose Embeddings
-
-**Context**: Semantic search quality depends on embedding model alignment with the domain vocabulary.
-
-**Decision**: Use PubMedBERT (768-dim) for all policy chunk embeddings.
+**Decision**: Pre-seeded database is the primary demo path. Upload is P1.
 
 **Rationale**:
-- 95.62% Pearson correlation on medical text similarity vs 93.46% for general models
-- Understands biomedical terminology (drug classes, disease names, procedure codes)
-- 768 dimensions keep storage and query costs reasonable in pgvector
-- Sufficient for the scale of a hackathon project (hundreds to low thousands of policies)
+- Demo reliability: pre-seeded data always works, live extraction can fail
+- Faster time to demo: seed script runs once, comparison UI is the hero feature
+- Upload proves the pipeline works but the demo does not depend on it
 
-**Trade-off**: Requires hosting or calling a PubMedBERT inference endpoint. For hackathon, can use a HuggingFace Inference API or a local model in the Python service.
+### ADR-002: Plans Table Between Payers and Policies
 
-### ADR-003: Hybrid Extraction (Structured + RAG) over Pure RAG
+**Context**: UHC Commercial in Texas and UHC Medicare Advantage in Florida have different coverage for the same drug. A flat `plan_types TEXT[]` on the payer table cannot represent this.
 
-**Context**: Users need both precise structured data (for comparison matrices, code lookups) and flexible natural language answers.
-
-**Decision**: Extract structured data into normalized tables AND store embedded chunks for RAG.
+**Decision**: Add a `plans` table with `line_of_business`, `state`, and `product_type` fields. Policies reference `plan_id` instead of `payer_id`.
 
 **Rationale**:
-- Structured data enables exact queries: "show me all drugs with J-code J0135 across payers"
-- RAG enables fuzzy queries: "which payers have the most lenient step therapy for biologics in RA?"
-- Comparison matrices require structured data -- you cannot build a Drug x Payer grid from RAG alone
-- Pure RAG hallucinates on precise code lookups; structured queries are deterministic
+- Enables accurate comparison: "Humira coverage under UHC Commercial PPO vs UHC Medicare Advantage"
+- Reflects how payers actually structure their products
+- Minimal additional complexity (one join)
 
-**Trade-off**: More complex pipeline (two storage paths), more processing time per document. Worth it for the quality of results.
+### ADR-003: Flat Fields + JSONB Over Normalized Tables
 
-### ADR-004: Neon Postgres + pgvector over Separate Vector DB
+**Context**: The original schema had 12 tables with nested criteria trees, step therapy, quantity limits, site of care, and provider requirements as separate tables.
+
+**Decision**: Store LLM extraction output as JSONB in `extracted_data` alongside flat queryable fields (`rxcui`, `j_code`, `coverage_status`, `prior_auth_required`).
+
+**Rationale**:
+- Queryable fields enable fast SQL lookups for search and comparison
+- JSONB stores the full extraction without schema migration for every new field
+- Provenance fields (`source_excerpt`, `source_page`, `confidence`) keep extractions auditable
+- 12 tables with foreign keys is over-engineering for a hackathon MVP
+- JSONB can be promoted to columns later if query patterns demand it
+
+### ADR-004: $0 Tech Stack with Free LLM Tiers
+
+**Context**: Hackathon project should not require paid API keys or services.
+
+**Decision**: Google Gemini 2.5 Flash (primary), Groq Llama 3.3 70B (backup), Ollama (fallback). Google gemini-embedding-001 for embeddings. Neon free tier for database.
+
+**Rationale**:
+- Gemini free tier: 500 req/day, sufficient for seeding ~20 policies and demo usage
+- Groq free tier: 6,000 req/day, fast inference, handles overflow
+- Ollama: unlimited local fallback, works offline
+- Google embeddings: free, 768-dim, same API key as Gemini
+- No AI Gateway needed (requires Vercel paid plan for OIDC)
+- Direct provider SDKs via `@ai-sdk/google` and `@ai-sdk/groq`
+
+### ADR-005: TypeScript-Only Pipeline for MVP
+
+**Context**: Best document parsing (Docling) and biomedical NER (scispaCy, Med7) are Python-only. But Python adds deployment complexity and dependency management overhead.
+
+**Decision**: Use `pdf-parse` for text extraction and Gemini structured output for entity extraction. No Python in MVP.
+
+**Rationale**:
+- Zero additional infrastructure (no FastAPI, no Vercel Services, no Python runtime)
+- LLM structured output with Zod schemas handles entity extraction well for digital PDFs
+- `pdf-parse` handles digital PDFs from major payer websites (not scanned documents)
+- Trade-off: worse table extraction than Docling. Acceptable for hackathon.
+- Python pipeline can be added as P2 for production quality
+
+### ADR-006: Neon Postgres + pgvector Over Separate Vector DB
 
 **Context**: Need both structured relational storage and vector similarity search.
 
 **Decision**: Single Neon Postgres instance with pgvector extension.
 
 **Rationale**:
-- Single database simplifies operations, deployment, and queries
-- pgvector IVFFlat index is performant for the expected scale (under 100K chunks)
+- Single database simplifies operations and queries
+- pgvector IVFFlat index is performant at hackathon scale (under 100K chunks)
 - Can join vector search results with structured tables in a single query
-- Neon provides serverless scaling, branching for dev/preview environments
-- No need for Pinecone/Weaviate operational overhead at hackathon scale
+- Neon free tier includes pgvector, 0.5 GB storage
+- No Pinecone/Weaviate operational overhead
 
-**Trade-off**: pgvector is slower than dedicated vector DBs at very large scale. Not a concern for this project.
+### ADR-007: Hybrid Extraction (Structured + RAG)
 
-### ADR-005: Vercel Services for Python/TypeScript Split
+**Context**: Users need precise data for comparison matrices AND flexible natural language answers.
 
-**Context**: Docling and scispaCy are Python-only. The rest of the app is Next.js/TypeScript.
-
-**Decision**: Deploy Python FastAPI as a Vercel Service alongside the Next.js app.
+**Decision**: Extract structured data into `policy_claims` AND store embedded chunks for RAG.
 
 **Rationale**:
-- Single deployment command (`vercel deploy`)
-- Same domain, no CORS issues
-- Service-to-service communication via auto-generated URL variables
-- Local development works via `vercel dev -L`
-- Minimal operational overhead for a hackathon
-
-**Fallback**: If Docling's dependencies exceed Vercel's build limits, deploy the Python service on Railway with a shared environment variable for the service URL.
-
-### ADR-006: AI SDK v6 AI Gateway over Direct Provider SDKs
-
-**Context**: Need LLM calls for structured extraction and RAG response generation.
-
-**Decision**: Use AI SDK v6 with AI Gateway, referencing models as `'anthropic/claude-sonnet-4.5'` string format.
-
-**Rationale**:
-- Provider-agnostic: can switch models without code changes
-- Built-in structured output via Zod schemas (`generateObject`)
-- Streaming support via `streamText` with `useChat` on the client
-- AI Gateway handles rate limiting, caching, and observability
-- No direct `@anthropic-ai/sdk` dependency to manage
+- Structured data enables exact queries: "show me all drugs with J-code J0135 across plans"
+- RAG enables fuzzy queries: "which plans have the most lenient step therapy for biologics?"
+- Comparison matrices require structured data -- cannot build a Drug x Plan grid from RAG alone
+- Pure RAG hallucinates on precise code lookups; structured queries are deterministic
 
 ---
 
-## 10. Hackathon Scope
+## 10. Scope
 
-### MVP (Demo Day)
+### P0 -- Must Ship (The Demo)
 
-These features form the core demo flow: upload a policy, see extracted data, search drugs, compare across payers, and ask questions.
-
-| Feature | Priority | Effort |
+| Feature | Effort | Notes |
 |---|---|---|
-| PDF upload to Vercel Blob | P0 | Low |
-| Docling parsing via Python service | P0 | Medium |
-| LLM structured extraction (AI SDK v6) | P0 | Medium |
-| RxNorm drug normalization | P0 | Low |
-| Postgres schema + Drizzle ORM | P0 | Medium |
-| Drug search (by name, J-code) | P0 | Low |
-| Coverage comparison matrix (Drug x Payer) | P0 | Medium |
-| RAG chat with policy citations | P0 | Medium |
-| Dashboard with stats | P1 | Low |
-| Policy detail view (criteria tree, codes) | P1 | Medium |
-| Dark mode UI with shadcn/ui | P1 | Low |
+| Pre-seeded database (3-5 policies per major payer) | Medium | UHC, Aetna, Anthem, Cigna, Humana |
+| Drug search by name and J-code | Low | SQL against policy_claims with RxNorm |
+| Coverage comparison matrix (Drug x Plan grid) | Medium | Core hero feature |
+| Policy detail view with provenance | Medium | Click to see source excerpt, page, confidence |
+| Change/version tracking view | Medium | "What changed this quarter" |
+| Dashboard with stats | Low | Total drugs, plans, policies, recent changes |
+| Dark mode UI with shadcn/ui | Low | Default theme |
+| Postgres schema + Drizzle ORM | Medium | 6 tables |
 
-### Pre-Seeded Data
+Target drugs for seeding: Humira (adalimumab), Keytruda (pembrolizumab), Ozempic (semaglutide), plus 2-3 others with interesting coverage variations.
 
-To ensure a compelling demo without requiring live uploads:
-- Pre-ingest 3-5 policies per major payer (UHC, Aetna, Anthem, Cigna, Humana) for high-interest drugs (Humira/adalimumab, Keytruda/pembrolizumab, Ozempic/semaglutide)
-- Store pre-extracted structured data and embeddings in the database
-- Upload flow demonstrates the pipeline but demo does not depend on it
+### P1 -- Strong to Have
 
-### Stretch Goals
-
-| Feature | Complexity | Value |
+| Feature | Effort | Notes |
 |---|---|---|
-| scispaCy + Med7 NER in Python service | Medium | Higher extraction accuracy |
-| Policy change detection + diff view | High | Key differentiator |
-| Scheduled crawling of payer websites | High | Automation story |
-| PubMedBERT embeddings (vs OpenAI fallback) | Medium | Domain accuracy |
-| FHIR resource export | Medium | Interoperability story |
-| CQL criteria generation | High | Computable criteria |
-| Side-by-side policy text comparison | Medium | Visual appeal |
-| Email/webhook alerts for policy changes | Low | Engagement feature |
+| RAG chat Q&A with cited answers | Medium | Gemini + pgvector retrieval |
+| Live PDF upload + extraction pipeline | Medium | Vercel Blob + same extraction as seeding |
+| Policy diff view (side-by-side changes) | Medium | Visual diff between policy versions |
 
-### Hackathon Simplifications
+### P2 -- Stretch
 
-- **Embedding model**: Start with OpenAI `text-embedding-3-small` via AI SDK if PubMedBERT hosting is complex. Switch to PubMedBERT as a stretch goal.
-- **Python NER**: Start with LLM-only extraction (AI SDK structured output). Add scispaCy as a stretch goal for improved accuracy on drug/code extraction.
-- **Job queue**: Use simple Postgres polling (check `processing_jobs` for `pending` status) instead of a dedicated queue system.
-- **Authentication**: None for hackathon. Add Clerk or NextAuth if time permits.
-- **Rate limiting**: Rely on AI Gateway built-in rate limiting. No custom implementation needed.
+| Feature | Effort | Notes |
+|---|---|---|
+| Python parsing pipeline (Docling, scispaCy, Med7) | High | Better table extraction, biomedical NER |
+| PubMedBERT embeddings | Medium | Higher domain accuracy than Google embeddings |
+| Automated crawling of payer websites | High | Scheduled jobs, change detection |
+| FHIR resource export | Medium | Interoperability |
+| CQL criteria generation | High | Computable clinical criteria |
+| Email/webhook alerts for policy changes | Low | Notification system |
 
 ---
 
-## Appendix A: Key TypeScript Interfaces
+## 11. Environment Variables
 
-```typescript
-// src/lib/types/policy.ts
+```bash
+# Required
+GOOGLE_GENERATIVE_AI_API_KEY=       # ai.google.dev free API key (Gemini + embeddings)
+DATABASE_URL=                        # Neon Postgres connection string
 
-interface MedicalPolicy {
-  id: string;
-  payer: { id: string; name: string; planTypes: string[] };
-  policyNumber: string;
-  title: string;
-  effectiveDate: string;
-  status: 'active' | 'archived' | 'draft';
-  drugCoverages: DrugCoverage[];
-}
-
-interface DrugCoverage {
-  id: string;
-  drug: {
-    brandName: string;
-    genericName: string;
-    rxcui?: string;
-    jCode?: string;
-    ndcCodes?: string[];
-  };
-  coverageStatus: 'covered' | 'not_covered' | 'covered_with_criteria' | 'experimental';
-  priorAuthRequired: boolean;
-  criteria: ClinicalCriterion[];
-  stepTherapy?: StepTherapyRequirement[];
-  quantityLimits?: QuantityLimit[];
-  siteOfCare?: SiteOfCareRequirement;
-  providerRequirements?: ProviderRequirement[];
-}
-
-interface ClinicalCriterion {
-  id: string;
-  type: CriterionType;
-  description: string;
-  required: boolean;
-  logicOperator?: 'AND' | 'OR' | 'NOT';
-  icdCodes?: { code: string; description: string }[];
-  children?: ClinicalCriterion[];
-}
-
-type CriterionType =
-  | 'diagnosis' | 'step_therapy' | 'lab_result'
-  | 'age' | 'gender' | 'provider_specialty'
-  | 'site_of_care' | 'quantity_limit' | 'duration_limit'
-  | 'documentation' | 'comorbidity' | 'contraindication';
-
-interface StepTherapyRequirement {
-  stepNumber: number;
-  drugOrClass: string;
-  minDuration?: string;
-  failureCriteria?: string;
-  contraIndicationBypass: boolean;
-}
-
-interface QuantityLimit {
-  quantity: number;
-  unit: string;
-  period: string;
-  maxDailyDose?: string;
-}
-
-interface ComparisonMatrix {
-  drug: { brandName: string; genericName: string; rxcui: string; jCode?: string };
-  payers: PayerComparison[];
-}
-
-interface PayerComparison {
-  payer: string;
-  planType: string;
-  coverageStatus: string;
-  priorAuth: boolean;
-  stepTherapyRequired: boolean;
-  stepTherapySteps?: number;
-  quantityLimit?: string;
-  siteOfCare?: string;
-  approvedDiagnoses: string[];
-  policyReference: string;
-  lastUpdated: string;
-}
-```
-
-## Appendix B: Environment Variables
-
-```
-# Neon Postgres
-DATABASE_URL=postgresql://...@...neon.tech/antonrx?sslmode=require
-
-# Vercel Blob
-BLOB_READ_WRITE_TOKEN=vercel_blob_...
-
-# AI Gateway (AI SDK v6)
-AI_GATEWAY_URL=https://gateway.ai.vercel.app/v1
-AI_GATEWAY_SECRET=...
-
-# RxNorm API (no key required, but set base URL)
-RXNORM_API_BASE=https://rxnav.nlm.nih.gov/REST
-
-# PubMedBERT (HuggingFace Inference or self-hosted)
-PUBMEDBERT_API_URL=https://api-inference.huggingface.co/models/microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract
-HF_API_TOKEN=hf_...
+# Optional
+GROQ_API_KEY=                        # Groq free API key (backup LLM)
+RXNORM_API_BASE=https://rxnav.nlm.nih.gov/REST  # Default, no key needed
+BLOB_READ_WRITE_TOKEN=               # Vercel Blob (only for P1 upload feature)
 ```
