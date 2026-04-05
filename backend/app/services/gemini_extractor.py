@@ -154,6 +154,25 @@ RULES:
 """.strip()
 
 
+def _build_fetch_hint_block(hints: dict) -> str:
+    """
+    Format fetch-layer metadata as grounding context prepended to the NLP hint
+    block.  Telling the LLM the payer name and drug name upfront reduces
+    hallucinated payer identities and missed drugs.
+    """
+    lines = ["=== FETCH METADATA (confirmed by retriever — use to ground extraction) ==="]
+    if hints.get("payer_name"):
+        lines.append(f"Payer (confirmed): {hints['payer_name']}")
+    if hints.get("drug_name"):
+        lines.append(f"Drug searched for: {hints['drug_name']}")
+    if hints.get("effective_date"):
+        lines.append(f"Effective date from URL/sidecar: {hints['effective_date']}")
+    if hints.get("source_url"):
+        lines.append(f"Source URL: {hints['source_url']}")
+    lines.append("=== END FETCH METADATA ===")
+    return "\n".join(lines)
+
+
 def _build_hint_block(nlp: MedNLPResult) -> str:
     """Format NLP pre-extraction results as a structured hint string for Gemini."""
     lines = ["=== NLP PRE-EXTRACTION HINTS (use these as grounding) ==="]
@@ -817,13 +836,22 @@ async def extract_policy_structure(
     nlp_result: MedNLPResult,
     provider: str | None = None,
     filename: str | None = None,
+    fetch_hints: dict | None = None,
 ) -> PolicyExtracted:
     """
     Main entry point. Takes raw policy text + NLP hints → returns validated PolicyExtracted.
     Handles long policies by splitting into sections and merging results.
     Branches on settings.llm_provider: "ollama" or "gemini".
+
+    fetch_hints (optional): metadata from the retriever layer (payer_name, drug_name,
+    effective_date, source_url).  Injected at the top of the hint block so the LLM
+    can confirm rather than re-infer already-known facts.
     """
-    hint_block = _build_hint_block(nlp_result)
+    nlp_hint_block = _build_hint_block(nlp_result)
+    if fetch_hints:
+        hint_block = _build_fetch_hint_block(fetch_hints) + "\n\n" + nlp_hint_block
+    else:
+        hint_block = nlp_hint_block
     selected_provider = provider or settings.llm_provider
     sections = _split_into_sections_for_provider(raw_text, selected_provider)
 
@@ -893,12 +921,34 @@ async def extract_policy_structure(
         if not data:
             raise RuntimeError("Structured extraction returned no valid JSON sections")
 
+<<<<<<< Updated upstream
+=======
+    # Sanitize: payer_name must be a string (LLMs sometimes return null)
+    if data.get("payer_name") is None:
+        data["payer_name"] = ""
+
+    # Apply fetch-layer hints as a gap-fill before validation.
+    # The LLM's output takes precedence; hints only fill in missing values.
+    if fetch_hints:
+        if not data.get("payer_name") and fetch_hints.get("payer_name"):
+            data["payer_name"] = fetch_hints["payer_name"]
+            log.info("payer_name filled from fetch context", payer=data["payer_name"])
+        if not data.get("effective_date") and fetch_hints.get("effective_date"):
+            data["effective_date"] = fetch_hints["effective_date"]
+
+>>>>>>> Stashed changes
     extracted = PolicyExtracted(**data)
     if not extracted.payer_name and not extracted.drug_coverages:
         if selected_provider in {"ollama", "groq"}:
             log.warning("Retrying with minimal extraction due to empty structured result", provider=selected_provider)
             fallback_data = await _extract_minimal_structure(raw_text, hint_block, selected_provider, nlp_result, filename)
             if fallback_data:
+                # Apply fetch hints to fallback data as well
+                if fetch_hints:
+                    if not fallback_data.get("payer_name") and fetch_hints.get("payer_name"):
+                        fallback_data["payer_name"] = fetch_hints["payer_name"]
+                    if not fallback_data.get("effective_date") and fetch_hints.get("effective_date"):
+                        fallback_data["effective_date"] = fetch_hints["effective_date"]
                 extracted = PolicyExtracted(**fallback_data)
         if not extracted.payer_name and not extracted.drug_coverages:
             raise RuntimeError("Structured extraction returned no payer name or drug coverages")

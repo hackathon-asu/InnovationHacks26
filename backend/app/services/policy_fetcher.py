@@ -13,6 +13,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -23,7 +24,7 @@ from app.retrievers.base import FetchResult
 from app.retrievers.cigna import CignaRetriever
 from app.retrievers.priority_health import PriorityHealthRetriever
 from app.retrievers.uhc import UHCRetriever
-from app.services.ingestion_pipeline import run_ingestion_pipeline
+from app.services.ingestion_pipeline import FetchContext, run_ingestion_pipeline
 from app.services.policy_store import PolicyStore, get_policy_dir
 
 log = get_logger(__name__)
@@ -85,9 +86,28 @@ async def _fetch_for_payer(
     return persisted
 
 
+async def _find_ingested_policy(file_hash: str) -> Optional[uuid.UUID]:
+    """
+    Return the policy_id of an already-successfully-ingested record with this
+    file hash, or None if no such record exists.
+
+    A record only counts as "done" when status="indexed".  pending/parsing/
+    failed records should all be re-triggered.
+    """
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Policy.id).where(
+                Policy.file_hash == file_hash,
+                Policy.status == "indexed",
+            ).limit(1)
+        )
+        row = result.scalar_one_or_none()
+        return row  # UUID or None
+
+
 async def _create_policy_record(result: FetchResult, provider: str) -> Optional[uuid.UUID]:
     """
-    Create a Policy DB record for a fetched file, then kick off ingestion.
+    Create a Policy DB record for a fetched file.
     Returns the policy_id, or None if the record could not be created.
     """
     if not result.success or not result.local_path:
@@ -159,16 +179,39 @@ async def run_auto_fetch(
             "policy_id": None,
         }
 
-        if result.success and result.is_new and not skip_pipeline:
-            # Create DB record and kick off ingestion pipeline
-            policy_id = await _create_policy_record(result, provider)
-            if policy_id:
-                policy_ids.append(str(policy_id))
-                entry["policy_id"] = str(policy_id)
-                # Fire-and-forget ingestion (same pattern as manual upload)
-                asyncio.create_task(
-                    run_ingestion_pipeline(policy_id, result.local_path, provider)
+        if result.success and not skip_pipeline:
+            # "is_new=False" only means the file on disk hasn't changed.
+            # It says nothing about whether a DB record was ever successfully
+            # ingested.  Always check the DB before skipping the pipeline.
+            already_ingested_id: Optional[uuid.UUID] = None
+            if not result.is_new and result.file_hash:
+                already_ingested_id = await _find_ingested_policy(result.file_hash)
+
+            if already_ingested_id:
+                # Truly a duplicate — DB record exists and is fully indexed.
+                entry["policy_id"] = str(already_ingested_id)
+                log.info(
+                    "Skipping pipeline — file already fully ingested",
+                    payer=result.payer,
+                    hash=result.file_hash[:12] if result.file_hash else "",
+                    policy_id=str(already_ingested_id),
                 )
+            else:
+                # New file OR existing file that was never (successfully) ingested.
+                policy_id = await _create_policy_record(result, provider)
+                if policy_id:
+                    policy_ids.append(str(policy_id))
+                    entry["policy_id"] = str(policy_id)
+                    ctx = FetchContext(
+                        payer_name=result.payer,
+                        drug_name=result.drug_name,
+                        effective_date=result.effective_date,
+                        source_url=result.source_url,
+                        content_type=result.content_type,
+                    )
+                    asyncio.create_task(
+                        run_ingestion_pipeline(policy_id, result.local_path, provider, ctx)
+                    )
 
         summary.append(entry)
 
