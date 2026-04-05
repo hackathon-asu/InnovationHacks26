@@ -53,6 +53,305 @@ flowchart LR
 
 ## Architecture
 
+### System Overview
+
+```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "#ffffff",
+    "primaryColor": "#f8f8f8",
+    "primaryBorderColor": "#999",
+    "lineColor": "#666",
+    "clusterBkg": "#ffffff",
+    "clusterBorder": "#bbb"
+  },
+  "flowchart": {
+    "nodeSpacing": 24,
+    "rankSpacing": 30,
+    "curve": "linear"
+  }
+}}%%
+flowchart LR
+
+  FE[Frontend<br/>Next.js 16 / React 19]
+  BFF[Next.js API Routes<br/>BFF Layer]
+  BE[FastAPI Backend<br/>Python]
+  DB[(Neon Postgres<br/>pgvector)]
+  AI[Gemini 2.5 Flash]
+  RX[RxNorm API]
+  PAYERS[Payer Websites]
+
+  FE --> BFF
+  BFF --> BE
+  BFF --> DB
+  BE --> DB
+  BE --> AI
+  BE --> RX
+  BE --> PAYERS
+```
+
+### Frontend
+
+```mermaid
+%%{init: {
+  "theme": "neutral",
+  "flowchart": {
+    "nodeSpacing": 18,
+    "rankSpacing": 24,
+    "curve": "linear"
+  }
+}}%%
+flowchart TB
+
+  subgraph FE["Frontend · Next.js 16 / React 19"]
+    UI[UI Shell]
+
+    subgraph Pages
+      HOME["Home Dashboard"]
+      DRUGS["Drug Search"]
+      DRUG_DETAIL["Drug Detail"]
+      POLICIES["Policy List"]
+      POLICY_DETAIL["Policy Detail"]
+      COMPARE["Policy Compare"]
+      CHANGES["Change Timeline"]
+      CHAT["AI Chat"]
+      FETCH["Payer Fetch"]
+      UPLOAD["PDF Upload"]
+      APIDOCS["API Docs"]
+    end
+
+    subgraph Components
+      TOPNAV[TopNav / Sidebar]
+      DRUGSEARCH[DrugSearch]
+      COVERAGEMATRIX[CoverageMatrix]
+      POLICYCARD[PolicyCard]
+      CLAIMDETAIL[ClaimDetail]
+      CHATUI[ChatInterface]
+      TIMELINE[ChangeTimeline]
+      DROPZONE[Dropzone]
+    end
+
+    subgraph Hooks
+      USE_DRUG[useDrugSearch]
+      USE_COMP[useComparison]
+    end
+  end
+
+  UI --> HOME
+  UI --> DRUGS
+  UI --> DRUG_DETAIL
+  UI --> POLICIES
+  UI --> POLICY_DETAIL
+  UI --> COMPARE
+  UI --> CHANGES
+  UI --> CHAT
+  UI --> FETCH
+  UI --> UPLOAD
+  UI --> APIDOCS
+
+  DRUGS --> DRUGSEARCH
+  DRUG_DETAIL --> COVERAGEMATRIX
+  POLICIES --> POLICYCARD
+  POLICY_DETAIL --> CLAIMDETAIL
+  CHAT --> CHATUI
+  CHANGES --> TIMELINE
+  UPLOAD --> DROPZONE
+
+  DRUGSEARCH --> USE_DRUG
+  COMPARE --> USE_COMP
+```
+
+### BFF / Next.js API Layer
+
+```mermaid
+%%{init: {
+  "theme": "neutral",
+  "flowchart": {
+    "nodeSpacing": 18,
+    "rankSpacing": 24,
+    "curve": "linear"
+  }
+}}%%
+flowchart TB
+
+  subgraph BFF["Next.js API Routes · BFF"]
+    API_CHAT["/api/chat"]
+    API_DRUGS_SEARCH["/api/drugs/search"]
+    API_DRUGS_ALL["/api/drugs/all"]
+    API_DRUGS_COV["/api/drugs/:rxcui/coverage"]
+    API_POLICIES["/api/policies"]
+    API_POLICY_ID["/api/policies/:id"]
+    API_POLICY_UPLOAD["/api/policies/upload"]
+    API_POLICY_STATUS["/api/policies/status/:id"]
+    API_FETCH["/api/fetch"]
+    API_FETCH_PAYERS["/api/fetch/payers"]
+    API_FETCH_INGEST["/api/fetch/ingest"]
+    API_FETCH_BATCH["/api/fetch/ingest-batch"]
+    API_CHANGES["/api/changes"]
+    API_COMPARE["/api/compare"]
+    API_STATS["/api/stats"]
+  end
+
+  DB[(Neon Postgres)]
+  FASTAPI[FastAPI Backend]
+
+  API_CHAT --> FASTAPI
+  API_FETCH_PAYERS --> FASTAPI
+  API_FETCH_INGEST --> FASTAPI
+  API_FETCH_BATCH --> FASTAPI
+
+  API_DRUGS_SEARCH --> DB
+  API_DRUGS_ALL --> DB
+  API_DRUGS_COV --> DB
+  API_POLICIES --> DB
+  API_POLICY_ID --> DB
+  API_POLICY_UPLOAD --> DB
+  API_POLICY_STATUS --> DB
+  API_CHANGES --> DB
+  API_COMPARE --> DB
+  API_STATS --> DB
+```
+
+### FastAPI Backend
+
+```mermaid
+%%{init: {
+  "theme": "neutral",
+  "flowchart": {
+    "nodeSpacing": 18,
+    "rankSpacing": 24,
+    "curve": "linear"
+  }
+}}%%
+flowchart TB
+
+  subgraph BE["Backend · FastAPI"]
+    FASTAPI_APP["FastAPI :8000"]
+
+    subgraph Routes
+      INGEST_R["/api/v1/ingest/*"]
+      QUERY_R["/api/v1/query/ask"]
+      FETCH_R["/api/v1/fetch/*"]
+    end
+
+    subgraph Services
+      PIPELINE[IngestionPipeline]
+      PDF_PARSER[PDFParser]
+      CHUNKER[Chunker]
+      EMBEDDER[Embedder]
+      GEMINI_EXT[GeminiExtractor]
+      NLP_EXT[NLPExtractor]
+      MEGA_EXT[MegaDocExtractor]
+      RAG[RAGQuery]
+      RXNORM_SVC[RxNormClient]
+      POLICY_FETCHER[PolicyFetcher]
+      POLICY_STORE[PolicyStore]
+      CHANGE_DET[ChangeDetector]
+    end
+
+    subgraph Retrievers
+      CIGNA[CignaRetriever]
+      UHC[UHCRetriever]
+      PRIORITY[PriorityHealthRetriever]
+    end
+  end
+
+  DB[(Neon Postgres)]
+  GEMINI[Gemini 2.5 Flash]
+  RXNORM_API[RxNorm API]
+  PAYER_SITES[Payer Websites]
+
+  INGEST_R --> PIPELINE
+  PIPELINE --> PDF_PARSER --> CHUNKER --> EMBEDDER
+  PIPELINE --> GEMINI_EXT
+  PIPELINE --> NLP_EXT
+  PIPELINE --> MEGA_EXT
+  PIPELINE --> POLICY_STORE
+
+  QUERY_R --> RAG
+  RAG --> EMBEDDER
+  RAG --> DB
+  RAG --> GEMINI
+
+  FETCH_R --> POLICY_FETCHER
+  POLICY_FETCHER --> CIGNA
+  POLICY_FETCHER --> UHC
+  POLICY_FETCHER --> PRIORITY
+
+  CIGNA --> PAYER_SITES
+  UHC --> PAYER_SITES
+  PRIORITY --> PAYER_SITES
+
+  RXNORM_SVC --> RXNORM_API
+  EMBEDDER --> GEMINI
+  GEMINI_EXT --> GEMINI
+  POLICY_STORE --> DB
+  CHANGE_DET --> DB
+  CHANGE_DET --> GEMINI
+```
+
+### Database Schema
+
+```mermaid
+%%{init: {
+  "theme": "neutral",
+  "flowchart": {
+    "nodeSpacing": 18,
+    "rankSpacing": 24,
+    "curve": "linear"
+  }
+}}%%
+flowchart TB
+
+  subgraph DBX["Database · Neon Postgres + pgvector"]
+    T_PAYERS[payers]
+    T_PLANS[plans]
+    T_POLICIES[policies]
+    T_VERSIONS[policy_versions]
+    T_CLAIMS[policy_claims]
+    T_CHUNKS["policy_chunks (768d vectors)"]
+    T_JOBS[processing_jobs]
+  end
+
+  T_PAYERS --> T_PLANS
+  T_PLANS --> T_POLICIES
+  T_POLICIES --> T_VERSIONS
+  T_POLICIES --> T_CLAIMS
+  T_POLICIES --> T_CHUNKS
+  T_POLICIES --> T_JOBS
+```
+
+### External Services
+
+```mermaid
+%%{init: {
+  "theme": "neutral",
+  "flowchart": {
+    "nodeSpacing": 18,
+    "rankSpacing": 24,
+    "curve": "linear"
+  }
+}}%%
+flowchart LR
+
+  FETCHER[PolicyFetcher]
+  RAG[RAGQuery]
+  EXTRACTOR[GeminiExtractor]
+  EMBEDDER[Embedder]
+  RXCLIENT[RxNormClient]
+
+  GEMINI[Gemini 2.5 Flash]
+  RXNORM[NIH RxNorm API]
+  PAYER_SITES[Payer Websites]
+
+  FETCHER --> PAYER_SITES
+  RAG --> GEMINI
+  EXTRACTOR --> GEMINI
+  EMBEDDER --> GEMINI
+  RXCLIENT --> RXNORM
+```
+
 AntonRX is split into two main parts:
 
 - `src/`: Next.js 16 frontend, route handlers, UI, and API proxy layer
@@ -225,6 +524,7 @@ Source headers credit:
 
 - Abhinav
 - Neeharika
+- Adi
 
 ## Disclaimer
 
