@@ -22,6 +22,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from bs4 import BeautifulSoup
+
 from app.core.logging import get_logger
 
 log = get_logger(__name__)
@@ -193,6 +195,67 @@ def _parse_with_pypdf(file_path: Path) -> tuple[str, list[PageText]]:
 
 
 MIN_TOTAL_CHARS = 500   # if Docling yields less than this, assume scanned → use Marker
+
+_HTML_DISCARD_TAGS = {"script", "style", "nav", "header", "footer", "noscript", "meta", "link"}
+
+
+def parse_html(file_path: Path) -> ParsedDocument:
+    """
+    Parse an HTML snapshot saved by a payer retriever.
+    Uses BeautifulSoup to strip tags and extract meaningful text, then applies
+    the same section detection and cleaning as the PDF path.
+    Returns a ParsedDocument with identical shape so the rest of the pipeline
+    is unaware of the source format.
+    """
+    raw_bytes = file_path.read_bytes()
+    file_hash = hashlib.sha256(raw_bytes).hexdigest()
+
+    soup = BeautifulSoup(raw_bytes, "lxml")
+    for tag in soup.find_all(_HTML_DISCARD_TAGS):
+        tag.decompose()
+
+    plain = soup.get_text(separator="\n")
+    cleaned = _clean_text(plain)
+
+    raw_blocks = re.split(r"\n{2,}", cleaned)
+    pages: list[PageText] = []
+    for i, block in enumerate(raw_blocks, start=1):
+        stripped = block.strip()
+        if stripped:
+            pages.append(PageText(
+                page_number=i,
+                text=stripped,
+                section_type=_detect_section(stripped),
+            ))
+
+    metadata: dict = {}
+    head_text = cleaned[:2000]
+    date_match = re.search(r"effective\s+(?:date[:\s]+)?(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})", head_text, re.I)
+    if date_match:
+        metadata["effective_date"] = date_match.group(1)
+    pol_match = re.search(r"policy\s+(?:number|#|no\.?)[:\s]+([A-Z0-9\-]+)", head_text, re.I)
+    if pol_match:
+        metadata["policy_number"] = pol_match.group(1)
+
+    log.info("HTML parse complete", paragraphs=len(pages), chars=len(cleaned), hash=file_hash[:12])
+    return ParsedDocument(
+        file_hash=file_hash,
+        page_count=len(pages),
+        pages=pages,
+        raw_markdown=cleaned,
+        metadata=metadata,
+    )
+
+
+def parse_document(file_path: Path, content_type: str = "pdf") -> ParsedDocument:
+    """
+    Unified entry point called by the ingestion pipeline.
+    Routes to parse_html() for HTML snapshots, parse_pdf() for everything else.
+    """
+    suffix = file_path.suffix.lower()
+    if content_type == "html" or suffix in (".html", ".htm"):
+        return parse_html(file_path)
+    return parse_pdf(file_path)
 
 
 def parse_pdf(file_path: Path) -> ParsedDocument:

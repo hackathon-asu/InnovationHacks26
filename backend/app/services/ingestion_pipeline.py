@@ -14,6 +14,7 @@ Stages:
 
 import asyncio
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 
 from sqlalchemy import select
@@ -30,10 +31,23 @@ from app.services.chunker import chunk_document
 from app.services.embedder import embed_chunks
 from app.services.gemini_extractor import extract_policy_structure
 from app.services.nlp_extractor import run_nlp_extraction
-from app.services.pdf_parser import parse_pdf
+from app.services.pdf_parser import parse_document
 from app.services.rxnorm_client import normalize_drug_list
 
 log = get_logger(__name__)
+
+
+@dataclass
+class FetchContext:
+    """
+    Metadata from the fetch layer forwarded to the pipeline as grounding hints.
+    All fields are optional so manually-uploaded documents degrade gracefully.
+    """
+    payer_name: str | None = None
+    drug_name: str | None = None
+    effective_date: str | None = None
+    source_url: str | None = None
+    content_type: str = "pdf"   # "pdf" | "html"
 
 STAGE_PROGRESS = {
     "parsing":          10,
@@ -81,20 +95,27 @@ async def _save_criterion(db: AsyncSession, coverage_id: uuid.UUID, criterion_da
         await _save_criterion(db, coverage_id, child, parent_id=criterion.id)
 
 
-async def run_ingestion_pipeline(policy_id: uuid.UUID, file_path: Path, provider: str | None = None):
+async def run_ingestion_pipeline(
+    policy_id: uuid.UUID,
+    file_path: Path,
+    provider: str | None = None,
+    fetch_context: FetchContext | None = None,
+):
     """Full 8-stage pipeline. Runs as a FastAPI BackgroundTask."""
-    log.info("Pipeline starting", policy_id=str(policy_id), provider=provider)
+    log.info("Pipeline starting", policy_id=str(policy_id), provider=provider,
+             content_type=fetch_context.content_type if fetch_context else "pdf")
 
     try:
-        # ── Stage 1: Parse (Docling → Marker → pypdf) ────────────────────────
+        # ── Stage 1: Parse — PDF → Docling/Marker/pypdf, HTML → BeautifulSoup
         await _set_status(policy_id, "parsing")
-        parsed = await asyncio.to_thread(parse_pdf, file_path)
+        content_type = fetch_context.content_type if fetch_context else "pdf"
+        parsed = await asyncio.to_thread(parse_document, file_path, content_type)
 
         # ── Stage 2: NLP pre-extraction ───────────────────────────────────────
         await _set_status(policy_id, "nlp_extracting")
         nlp_result = await asyncio.to_thread(run_nlp_extraction, parsed.full_text)
 
-        # ── Stage 3: LLM structured extraction (NLP-grounded) ────────────────
+        # ── Stage 3: LLM structured extraction (NLP-grounded + fetch hints) ──
         await _set_status(policy_id, "gemini_extracting")
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Policy).where(Policy.id == policy_id))
@@ -102,11 +123,23 @@ async def run_ingestion_pipeline(policy_id: uuid.UUID, file_path: Path, provider
             policy_for_extraction.llm_provider = provider or "ollama"
             await db.commit()
 
+        fetch_hints: dict | None = None
+        if fetch_context:
+            fetch_hints = {
+                k: v for k, v in {
+                    "payer_name": fetch_context.payer_name,
+                    "drug_name": fetch_context.drug_name,
+                    "effective_date": fetch_context.effective_date,
+                    "source_url": fetch_context.source_url,
+                }.items() if v is not None
+            } or None
+
         extracted = await extract_policy_structure(
             parsed.full_text,
             nlp_result,
             provider=provider,
             filename=policy_for_extraction.filename,
+            fetch_hints=fetch_hints,
         )
 
         # ── Stage 4: RxNorm normalization ─────────────────────────────────────
@@ -123,11 +156,16 @@ async def run_ingestion_pipeline(policy_id: uuid.UUID, file_path: Path, provider
             result = await db.execute(select(Policy).where(Policy.id == policy_id))
             policy = result.scalar_one()
 
-            # Update policy metadata from extraction
+            # Update policy metadata from extraction.
+            # Precedence: LLM extraction > regex from document > fetch-layer hint.
             policy.payer_name = extracted.payer_name or policy.payer_name
             policy.policy_number = extracted.policy_number
             policy.title = extracted.title
-            policy.effective_date = extracted.effective_date or parsed.metadata.get("effective_date")
+            policy.effective_date = (
+                extracted.effective_date
+                or parsed.metadata.get("effective_date")
+                or (fetch_context.effective_date if fetch_context else None)
+            )
             policy.policy_type = extracted.policy_type
             policy.page_count = parsed.page_count
             policy.file_hash = parsed.file_hash
