@@ -258,20 +258,60 @@ def parse_document(file_path: Path, content_type: str = "pdf") -> ParsedDocument
     return parse_pdf(file_path)
 
 
+def _parse_text_file(file_path: Path) -> tuple[str, list[PageText]]:
+    """Parse plain text or HTML files directly — no PDF tooling needed."""
+    raw = file_path.read_text(encoding="utf-8", errors="replace")
+
+    # Strip HTML tags if present
+    if "<html" in raw[:500].lower() or "<body" in raw[:500].lower() or "<div" in raw[:1000].lower():
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(raw, "lxml")
+            text = soup.get_text(" ", strip=True)
+        except Exception:
+            text = re.sub(r"<[^>]+>", " ", raw)
+    else:
+        text = raw
+
+    cleaned = _clean_text(text)
+
+    # Split into ~3000-char synthetic "pages" for downstream compatibility
+    chunk_size = 3000
+    blocks = [cleaned[i:i + chunk_size] for i in range(0, len(cleaned), chunk_size)]
+    pages = [
+        PageText(
+            page_number=i + 1,
+            text=block.strip(),
+            section_type=_detect_section(block),
+        )
+        for i, block in enumerate(blocks) if block.strip()
+    ]
+
+    log.info("Text/HTML parse complete", chars=len(cleaned), pages=len(pages))
+    return cleaned, pages
+
+
 def parse_pdf(file_path: Path) -> ParsedDocument:
     """
-    Main entry point. Uses Docling → Marker → pypdf fallback chain.
-    Returns ParsedDocument with per-page text, section types, and full Markdown.
+    Main entry point. Handles PDF, HTML, TXT, DOCX files.
+    PDF: Docling → Marker → pypdf fallback chain.
+    Text/HTML: direct text extraction.
     """
     file_hash = compute_sha256(file_path)
-    log.info("Parsing document", path=str(file_path), hash=file_hash[:12])
+    suffix = file_path.suffix.lower()
+    log.info("Parsing document", path=str(file_path), hash=file_hash[:12], type=suffix)
 
-    full_markdown, pages = _parse_with_docling(file_path)
+    # Non-PDF files: parse as text/HTML directly
+    if suffix in (".txt", ".html", ".htm", ".md", ".csv", ".xml"):
+        full_markdown, pages = _parse_text_file(file_path)
+    else:
+        # PDF path: Docling → Marker → pypdf
+        full_markdown, pages = _parse_with_docling(file_path)
 
-    total_chars = sum(len(p.text) for p in pages)
-    if total_chars < MIN_TOTAL_CHARS:
-        log.info("Low text yield from Docling, switching to Marker OCR", chars=total_chars)
-        full_markdown, pages = _parse_with_marker(file_path)
+        total_chars = sum(len(p.text) for p in pages)
+        if total_chars < MIN_TOTAL_CHARS:
+            log.info("Low text yield from Docling, switching to Marker OCR", chars=total_chars)
+            full_markdown, pages = _parse_with_marker(file_path)
 
     # Attempt to extract top-level metadata from first page
     metadata = {}
