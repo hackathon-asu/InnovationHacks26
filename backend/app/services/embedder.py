@@ -100,7 +100,7 @@ async def embed_chunks(chunks: "list[Chunk]", provider: str | None = None) -> li
         batch = texts[i: i + BATCH_SIZE]
         if selected_provider == "nvidia" and settings.nvidia_api_key:
             batch_embeddings = await loop.run_in_executor(None, _embed_batch_nvidia, batch, "passage")
-        elif selected_provider in ("ollama", "groq"):
+        elif selected_provider in ("ollama", "groq", "anthropic"):
             batch_embeddings = await loop.run_in_executor(None, _embed_batch_ollama, batch)
         else:
             batch_embeddings = await loop.run_in_executor(None, _embed_batch_gemini, batch, "retrieval_document")

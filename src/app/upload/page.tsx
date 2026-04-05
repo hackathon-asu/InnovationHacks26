@@ -13,7 +13,7 @@ type PipelineStatus = {
 };
 
 export default function UploadPage() {
-  const [provider, setProvider] = useState<'gemini' | 'ollama' | 'groq' | 'nvidia'>('ollama');
+  const [provider, setProvider] = useState<'gemini' | 'ollama' | 'groq' | 'nvidia' | 'anthropic'>('ollama');
   const [uploading, setUploading] = useState(false);
   const [policyId, setPolicyId] = useState<string | null>(null);
   const [pipeline, setPipeline] = useState<PipelineStatus | null>(null);
@@ -78,17 +78,17 @@ export default function UploadPage() {
           <div className="mb-5 flex items-center gap-3">
             <span className="text-sm font-medium text-slate-600">LLM Provider:</span>
             <div className="flex rounded-xl border border-slate-200 bg-[#F6F8FB] p-0.5">
-              {(['gemini', 'nvidia', 'groq', 'ollama'] as const).map((p) => (
+              {(['gemini', 'anthropic', 'nvidia', 'groq', 'ollama'] as const).map((p) => (
                 <button
                   key={p}
                   onClick={() => setProvider(p)}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-all ${
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
                     provider === p
                       ? 'bg-[#15173F] text-white shadow-sm'
                       : 'text-slate-500 hover:text-slate-700'
                   }`}
                 >
-                  {p === 'gemini' ? 'Gemini' : p === 'nvidia' ? 'NVIDIA' : p === 'groq' ? 'Groq' : 'Ollama'}
+                  {p === 'gemini' ? 'Gemini' : p === 'anthropic' ? 'Claude' : p === 'nvidia' ? 'NVIDIA' : p === 'groq' ? 'Groq' : 'Ollama'}
                 </button>
               ))}
             </div>

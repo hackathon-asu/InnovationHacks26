@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     llm_provider: str = "ollama"
 
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-2.5-flash-lite"
 
     # Ollama (dev default) — run: ollama pull qwen3:4b && ollama pull nomic-embed-text
     ollama_base_url: str = "http://localhost:11434"
@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
     nvidia_model: str = "deepseek-ai/deepseek-v3.2"
     nvidia_embed_model: str = "nvidia/nv-embedqa-e5-v5"
+
+    # Anthropic (console.anthropic.com)
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-sonnet-4-5-20250514"
 
     database_url: str = "postgresql+asyncpg://postgres:password@localhost:5432/antonrx"
 
