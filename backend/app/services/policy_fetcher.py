@@ -174,6 +174,7 @@ async def run_auto_fetch(
             "effective_date": result.effective_date,
             "error": result.error,
             "policy_id": None,
+            "local_path": str(result.local_path) if result.local_path else None,
         }
 
         if result.success and not skip_pipeline:

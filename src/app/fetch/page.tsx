@@ -16,6 +16,7 @@ type ResultEntry = {
   effective_date: string | null;
   error: string | null;
   policy_id: string | null;
+  local_path: string | null;
 };
 
 type FetchResponse = {
@@ -37,9 +38,12 @@ export default function FetchPage() {
   const [selectedPayers, setSelectedPayers] = useState<string[]>([]);
   const [drugName, setDrugName] = useState('');
   const [provider, setProvider] = useState<Provider>('gemini');
+  const [autoIngest, setAutoIngest] = useState(false);
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<FetchResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [ingesting, setIngesting] = useState<Set<number>>(new Set());
+  const [ingested, setIngested] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     fetch('/api/fetch/payers')
@@ -64,12 +68,14 @@ export default function FetchPage() {
     setLoading(true);
     setError(null);
     setResponse(null);
+    setIngesting(new Set());
+    setIngested(new Set());
 
     try {
       const res = await fetch('/api/fetch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ drug_name: drugName.trim(), payers: selectedPayers, provider }),
+        body: JSON.stringify({ drug_name: drugName.trim(), payers: selectedPayers, provider, auto_ingest: autoIngest }),
       });
       const data: FetchResponse = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Fetch failed');
@@ -81,7 +87,58 @@ export default function FetchPage() {
     }
   }
 
+  async function handleIngest(result: ResultEntry, index: number) {
+    if (!result.local_path || ingesting.has(index) || ingested.has(index)) return;
+
+    setIngesting((prev) => new Set(prev).add(index));
+    try {
+      const res = await fetch('/api/fetch/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          local_path: result.local_path,
+          payer: result.payer,
+          filename: result.filename,
+          provider,
+          source_url: result.source_url,
+          file_hash: result.file_hash,
+          effective_date: result.effective_date,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.policy_id) {
+        setIngested((prev) => new Set(prev).add(index));
+        // Update the result with the policy_id
+        if (response) {
+          const updated = { ...response };
+          updated.results[index].policy_id = data.policy_id;
+          setResponse(updated);
+        }
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setIngesting((prev) => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
+    }
+  }
+
+  async function handleIngestAll() {
+    if (!response) return;
+    const eligible = response.results
+      .map((r, i) => ({ r, i }))
+      .filter(({ r, i }) => r.is_new && !r.error && r.local_path && !ingested.has(i));
+
+    for (const { r, i } of eligible) {
+      await handleIngest(r, i);
+    }
+  }
+
   const done = response?.status === 'complete';
+  const eligibleCount = response?.results.filter((r, i) => r.is_new && !r.error && r.local_path && !ingested.has(i)).length ?? 0;
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-8">
@@ -90,9 +147,8 @@ export default function FetchPage() {
           Fetch Latest Policies
         </h1>
         <p className="mt-2 text-slate-500 dark:text-slate-400 text-sm max-w-2xl">
-          Automatically retrieve the newest medical benefit policy documents from payer websites.
-          Select a drug and payers — the system will find, download, and ingest the latest policies
-          without manual site visits.
+          Retrieve the newest policy documents from payer websites.
+          Review fetched files, then choose which ones to send through the AI pipeline.
         </p>
       </div>
 
@@ -168,6 +224,20 @@ export default function FetchPage() {
             </div>
           </div>
 
+          {/* Auto-ingest toggle */}
+          <label className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-white/10 bg-[#F6F8FB] dark:bg-[#0F1117] p-3 cursor-pointer hover:border-[#91BFEB] transition">
+            <input
+              type="checkbox"
+              checked={autoIngest}
+              onChange={(e) => setAutoIngest(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 accent-[#91BFEB]"
+            />
+            <div>
+              <div className="text-sm font-medium text-slate-800 dark:text-white">Auto-ingest new files</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">Automatically start the AI pipeline for all new files. Uncheck to review first.</div>
+            </div>
+          </label>
+
           {error && (
             <p className="rounded-xl bg-red-50 dark:bg-red-500/10 px-4 py-2.5 text-sm text-red-600 dark:text-red-400">{error}</p>
           )}
@@ -187,15 +257,6 @@ export default function FetchPage() {
               'Fetch latest policies'
             )}
           </button>
-
-          <p className="text-xs text-slate-400 dark:text-slate-500 text-center">
-            New files are automatically stored and ingested into the pipeline.
-            Check{' '}
-            <Link href="/policies" className="text-[#91BFEB] hover:underline">
-              Policies
-            </Link>{' '}
-            for status.
-          </p>
         </div>
 
         {/* Right — Results */}
@@ -243,20 +304,38 @@ export default function FetchPage() {
                 </div>
               </div>
 
+              {/* Ingest all button (only when not auto-ingesting) */}
+              {!autoIngest && eligibleCount > 0 && (
+                <button
+                  onClick={handleIngestAll}
+                  className="w-full rounded-xl bg-emerald-600 dark:bg-emerald-500 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition"
+                >
+                  Ingest all {eligibleCount} new {eligibleCount === 1 ? 'file' : 'files'}
+                </button>
+              )}
+
               {/* Per-payer result cards */}
               {response.results.map((r, i) => (
-                <ResultCard key={i} result={r} />
+                <ResultCard
+                  key={i}
+                  result={r}
+                  index={i}
+                  autoIngest={autoIngest}
+                  isIngesting={ingesting.has(i)}
+                  isIngested={ingested.has(i)}
+                  onIngest={() => handleIngest(r, i)}
+                />
               ))}
 
               {/* Pipeline links */}
-              {response.policy_ids.length > 0 && (
+              {(response.policy_ids.length > 0 || ingested.size > 0) && (
                 <div className="rounded-2xl border border-[#91BFEB]/40 bg-[#dceeff]/40 dark:bg-[#91BFEB]/10 p-4 text-sm">
                   <p className="font-semibold text-[#15173F] dark:text-white mb-2">
                     Ingestion pipeline started
                   </p>
                   <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
-                    {response.policy_ids.length}{' '}
-                    {response.policy_ids.length === 1 ? 'policy is' : 'policies are'} now
+                    {response.policy_ids.length + ingested.size}{' '}
+                    {(response.policy_ids.length + ingested.size) === 1 ? 'policy is' : 'policies are'} now
                     processing through the 8-stage pipeline.
                   </p>
                   <Link
@@ -276,9 +355,17 @@ export default function FetchPage() {
   );
 }
 
-function ResultCard({ result }: { result: ResultEntry }) {
+function ResultCard({ result, index, autoIngest, isIngesting, isIngested, onIngest }: {
+  result: ResultEntry;
+  index: number;
+  autoIngest: boolean;
+  isIngesting: boolean;
+  isIngested: boolean;
+  onIngest: () => void;
+}) {
   const isError = result.content_type === 'error';
   const isDedup = !result.is_new && !isError;
+  const canIngest = result.is_new && !isError && result.local_path && !autoIngest && !isIngested;
 
   return (
     <div
@@ -287,6 +374,8 @@ function ResultCard({ result }: { result: ResultEntry }) {
           ? 'border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10'
           : isDedup
           ? 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5'
+          : isIngested
+          ? 'border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10'
           : 'border-green-200 dark:border-green-500/30 bg-green-50 dark:bg-green-500/10'
       }`}
     >
@@ -297,7 +386,30 @@ function ResultCard({ result }: { result: ResultEntry }) {
             <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 truncate">{result.filename}</p>
           )}
         </div>
-        <StatusBadge result={result} />
+        <div className="flex items-center gap-2">
+          {canIngest && (
+            <button
+              onClick={onIngest}
+              disabled={isIngesting}
+              className="shrink-0 rounded-lg bg-[#15173F] dark:bg-[#91BFEB] px-3 py-1 text-xs font-semibold text-white dark:text-[#15173F] hover:opacity-90 disabled:opacity-50 transition"
+            >
+              {isIngesting ? (
+                <span className="flex items-center gap-1.5">
+                  <span className="h-3 w-3 rounded-full border-2 border-white/30 dark:border-[#15173F]/30 border-t-white dark:border-t-[#15173F] animate-spin" />
+                  Ingesting…
+                </span>
+              ) : (
+                'Ingest'
+              )}
+            </button>
+          )}
+          {isIngested && (
+            <span className="shrink-0 rounded-full bg-emerald-100 dark:bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+              Pipeline started
+            </span>
+          )}
+          <StatusBadge result={result} />
+        </div>
       </div>
 
       {/* Metadata row */}

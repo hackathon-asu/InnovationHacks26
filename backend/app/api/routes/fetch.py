@@ -53,6 +53,10 @@ class FetchRequest(BaseModel):
         "gemini",
         description="LLM provider for ingestion pipeline (gemini|ollama|groq|nvidia|anthropic)",
     )
+    auto_ingest: bool = Field(
+        False,
+        description="If true, automatically start ingestion pipeline for new files",
+    )
 
 
 class FetchResponse(BaseModel):
@@ -101,12 +105,57 @@ async def fetch_policies(body: FetchRequest):
             drug_name=body.drug_name,
             payer_names=body.payers,
             provider=body.provider,
+            skip_pipeline=not body.auto_ingest,
         )
     except Exception as exc:
         log.error("Auto-fetch failed", error=str(exc))
         raise HTTPException(status_code=500, detail=f"Fetch failed: {exc}")
 
     return FetchResponse(**result)
+
+
+class IngestRequest(BaseModel):
+    local_path: str = Field(..., description="Path to the fetched file on disk")
+    payer: str = Field(..., description="Payer name")
+    filename: str = Field(..., description="Original filename")
+    provider: str = Field("gemini", description="LLM provider")
+    source_url: str | None = None
+    file_hash: str | None = None
+    effective_date: str | None = None
+
+
+@router.post("/ingest")
+async def ingest_fetched_file(body: IngestRequest):
+    """Manually trigger ingestion for a previously fetched file."""
+    import asyncio
+    import uuid
+    from pathlib import Path
+    from app.db.session import AsyncSessionLocal
+    from app.models.policy import Policy
+    from app.services.ingestion_pipeline import run_ingestion_pipeline
+
+    file_path = Path(body.local_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {body.local_path}")
+
+    policy_id = uuid.uuid4()
+    async with AsyncSessionLocal() as db:
+        policy = Policy(
+            id=policy_id,
+            filename=body.filename,
+            payer_name=body.payer,
+            original_file_path=str(file_path),
+            source_url=body.source_url or "",
+            file_hash=body.file_hash or "",
+            effective_date=body.effective_date,
+            status="pending",
+        )
+        db.add(policy)
+        await db.commit()
+
+    asyncio.create_task(run_ingestion_pipeline(policy_id, file_path, body.provider))
+
+    return {"policy_id": str(policy_id), "status": "pipeline_started"}
 
 
 @router.get("/payers")
