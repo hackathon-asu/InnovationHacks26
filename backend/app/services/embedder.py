@@ -1,6 +1,6 @@
 """
-Embedding service — Gemini text-embedding-004 or Ollama nomic-embed-text (768-dim).
-Provider selected via settings.llm_provider ("gemini" | "ollama").
+Embedding service — supports Gemini, Ollama, NVIDIA, and Groq (via Ollama fallback).
+All produce 768-dim vectors to match the pgvector HNSW index.
 """
 
 import asyncio
@@ -57,6 +57,37 @@ def _embed_batch_ollama(texts: list[str]) -> list[list[float]]:
     return results
 
 
+def _embed_batch_nvidia(texts: list[str]) -> list[list[float]]:
+    """NVIDIA NIM embedding API — OpenAI-compatible."""
+    results = []
+    for t in texts:
+        for attempt in range(3):
+            try:
+                response = httpx.post(
+                    f"{settings.nvidia_base_url}/embeddings",
+                    headers={"Authorization": f"Bearer {settings.nvidia_api_key}"},
+                    json={
+                        "model": settings.nvidia_embed_model,
+                        "input": [t],
+                        "encoding_format": "float",
+                    },
+                    timeout=30.0,
+                )
+                response.raise_for_status()
+                embedding = response.json()["data"][0]["embedding"]
+                # Truncate to 768 dims if model returns more (nv-embedqa-e5-v5 returns 1024)
+                results.append(embedding[:settings.embedding_dimensions])
+                break
+            except (httpx.HTTPStatusError, httpx.ReadTimeout) as e:
+                if attempt < 2:
+                    wait = 5 * (attempt + 1)
+                    log.warning("NVIDIA embed retry", attempt=attempt + 1, wait=wait, error=str(e))
+                    time.sleep(wait)
+                else:
+                    raise
+    return results
+
+
 async def embed_chunks(chunks: "list[Chunk]", provider: str | None = None) -> list[list[float]]:
     """Embed document chunks in batches of 50."""
     texts = [c.text for c in chunks]
@@ -66,7 +97,9 @@ async def embed_chunks(chunks: "list[Chunk]", provider: str | None = None) -> li
 
     for i in range(0, len(texts), BATCH_SIZE):
         batch = texts[i: i + BATCH_SIZE]
-        if selected_provider == "ollama":
+        if selected_provider == "nvidia" and settings.nvidia_api_key:
+            batch_embeddings = await loop.run_in_executor(None, _embed_batch_nvidia, batch)
+        elif selected_provider in ("ollama", "groq"):
             batch_embeddings = await loop.run_in_executor(None, _embed_batch_ollama, batch)
         else:
             batch_embeddings = await loop.run_in_executor(None, _embed_batch_gemini, batch, "retrieval_document")
@@ -79,8 +112,10 @@ async def embed_chunks(chunks: "list[Chunk]", provider: str | None = None) -> li
 async def embed_query(question: str) -> list[float]:
     """Embed a single query string for vector search."""
     loop = asyncio.get_event_loop()
-    if settings.llm_provider == "ollama":
+    if settings.llm_provider in ("ollama", "groq"):
         result = await loop.run_in_executor(None, _embed_batch_ollama, [question])
+    elif settings.llm_provider == "nvidia" and settings.nvidia_api_key:
+        result = await loop.run_in_executor(None, _embed_batch_nvidia, [question])
     else:
         result = await loop.run_in_executor(None, _embed_batch_gemini, [question], "retrieval_query")
     return result[0]

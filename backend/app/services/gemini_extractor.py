@@ -412,6 +412,8 @@ def _split_into_sections_for_provider(text: str, provider: str | None) -> list[s
         return _split_into_sections(text, max_chars=12_000)
     if provider == "groq":
         return _split_into_sections(text, max_chars=20_000)
+    if provider == "nvidia":
+        return _split_into_sections(text, max_chars=30_000)  # 70B model, 32K context
     return _split_into_sections(text)
 
 
@@ -627,6 +629,44 @@ async def _extract_minimal_section_groq(section_text: str, hint_block: str) -> d
         raise
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=2, min=5, max=30),
+    retry=retry_if_exception(_is_retryable),
+)
+async def _extract_section_nvidia(section_text: str, hint_block: str) -> dict:
+    """Extract structured data via NVIDIA Build API (OpenAI-compatible)."""
+    prompt = f"{hint_block}\n\nPOLICY DOCUMENT SECTION:\n\n{section_text}"
+
+    async with _llm_semaphore:
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            resp = await client.post(
+                f"{settings.nvidia_base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {settings.nvidia_api_key}"},
+                json={
+                    "model": settings.nvidia_model,
+                    "messages": [
+                        {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": 0,
+                    "max_tokens": 8192,
+                },
+            )
+            if resp.status_code == 404:
+                raise RuntimeError(f"NVIDIA model '{settings.nvidia_model}' not found (404). Check NVIDIA_MODEL in .env")
+            resp.raise_for_status()
+            body = resp.json()
+            content = body["choices"][0]["message"]["content"]
+
+    try:
+        return _parse_json_payload(content)
+    except json.JSONDecodeError as e:
+        raw_json = _strip_json_fences(content)
+        log.warning("NVIDIA JSON parse failed", error=str(e), snippet=raw_json[:300])
+        raise
+
+
 def _merge_section_results(sections: list[dict]) -> dict:
     """
     Merge results from multiple section extractions into a single policy object.
@@ -760,7 +800,6 @@ async def extract_policy_structure(
             data = _merge_section_results(valid)
     elif selected_provider == "groq":
         log.info("Sending to Groq", model=settings.groq_model, sections=len(sections), total_chars=len(raw_text))
-        # Groq is fast but rate-limited — process sections sequentially to respect token budget
         section_results = []
         for s in sections:
             try:
@@ -769,6 +808,17 @@ async def extract_policy_structure(
             except Exception as e:
                 log.warning("Groq section failed", error=str(e))
         data = _merge_section_results(section_results)
+    elif selected_provider == "nvidia":
+        log.info("Sending to NVIDIA", model=settings.nvidia_model, sections=len(sections), total_chars=len(raw_text))
+        if len(sections) == 1:
+            data = await _extract_section_nvidia(sections[0], hint_block)
+        else:
+            section_results = await asyncio.gather(
+                *[_extract_section_nvidia(s, hint_block) for s in sections],
+                return_exceptions=True
+            )
+            valid = [r for r in section_results if isinstance(r, dict)]
+            data = _merge_section_results(valid)
     else:
         model = genai.GenerativeModel(
             model_name=settings.gemini_model,

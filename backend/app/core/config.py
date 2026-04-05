@@ -8,8 +8,7 @@ class Settings(BaseSettings):
     app_name: str = "AntonRX"
     environment: str = "development"
 
-    # LLM provider: "gemini" or "ollama"
-    # Set LLM_PROVIDER=gemini in prod .env once Gemini credits are available
+    # LLM provider: "gemini" | "ollama" | "groq" | "nvidia"
     llm_provider: str = "ollama"
 
     gemini_api_key: str = ""
@@ -23,7 +22,13 @@ class Settings(BaseSettings):
     # Groq (fast cloud fallback) — free tier: 6000 tokens/min on llama models
     groq_api_key: str = ""
     groq_model: str = "llama-3.1-8b-instant"
-    groq_max_tokens_per_min: int = 6000  # free tier limit — we use (this - 500) per request
+    groq_max_tokens_per_min: int = 6000
+
+    # NVIDIA Build (build.nvidia.com) — OpenAI-compatible, 1000 free credits
+    nvidia_api_key: str = ""
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
+    nvidia_model: str = "deepseek-ai/deepseek-v3.2"
+    nvidia_embed_model: str = "nvidia/nv-embedqa-e5-v5"
 
     database_url: str = "postgresql+asyncpg://postgres:password@localhost:5432/antonrx"
 

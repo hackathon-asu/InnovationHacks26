@@ -74,6 +74,7 @@ class Policy(Base):
     status: Mapped[str] = mapped_column(String(32), default="pending")
     # pending|parsing|extracting|normalizing|saving_structured|chunking|embedding|indexing|indexed|failed
     error_message: Mapped[Optional[str]] = mapped_column(Text)
+    llm_provider: Mapped[Optional[str]] = mapped_column(String(32))  # gemini|ollama|groq|nvidia
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

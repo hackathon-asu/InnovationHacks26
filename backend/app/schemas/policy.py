@@ -121,7 +121,9 @@ class PolicyListItem(BaseModel):
     effective_date: Optional[str] = None
     status: str
     drug_count: int
+    llm_provider: Optional[str] = None
     created_at: datetime
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
