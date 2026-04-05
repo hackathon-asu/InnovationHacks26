@@ -1,27 +1,79 @@
 'use client';
 
-import { useState } from 'react';
-import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport } from 'ai';
+import { useState, useRef, useEffect } from 'react';
 import { MessageBubble } from './message-bubble';
 
-const transport = new DefaultChatTransport({ api: '/api/chat' });
+type Message = { id: string; role: 'user' | 'assistant'; content: string };
+type Provider = 'gemini' | 'nvidia' | 'groq' | 'ollama';
 
 export function ChatInterface() {
   const [input, setInput] = useState('');
-  const { messages, sendMessage, status } = useChat({ transport });
-  const isLoading = status === 'streaming' || status === 'submitted';
+  const [provider, setProvider] = useState<Provider>('ollama');
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages]);
 
   async function handleSend() {
     const text = input.trim();
     if (!text || isLoading) return;
     setInput('');
-    await sendMessage({ text });
+
+    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: text };
+    setMessages((prev) => [...prev, userMsg]);
+    setIsLoading(true);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: text, provider }),
+      });
+      const data = await res.json();
+      const answer = data.answer ?? data.error ?? 'No response from backend.';
+      const sources = data.sources?.length
+        ? `\n\n---\n**Sources:** ${data.sources.map((s: { payer_name: string; filename: string }) => `${s.payer_name} (${s.filename})`).join(', ')}`
+        : '';
+      setMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), role: 'assistant', content: answer + sources },
+      ]);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), role: 'assistant', content: 'Failed to reach the backend.' },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
     <div className="flex h-[calc(100vh-16rem)] flex-col">
-      <div className="flex-1 overflow-y-auto space-y-4 pb-4">
+      {/* Provider toggle */}
+      <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
+        <span className="text-xs font-medium text-slate-500">Model:</span>
+        <div className="flex rounded-lg border border-slate-200 bg-[#F6F8FB] p-0.5">
+          {(['gemini', 'nvidia', 'groq', 'ollama'] as const).map((p) => (
+            <button
+              key={p}
+              onClick={() => setProvider(p)}
+              className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-all ${
+                provider === p
+                  ? 'bg-[#15173F] text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {p === 'gemini' ? 'Gemini' : p === 'nvidia' ? 'NVIDIA' : p === 'groq' ? 'Groq' : 'Ollama'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 py-4">
         {messages.length === 0 && (
           <div className="py-12 text-center">
             <div className="mx-auto mb-4 h-12 w-12 rounded-2xl bg-[#15173F] flex items-center justify-center text-white font-semibold">AI</div>
@@ -35,7 +87,7 @@ export function ChatInterface() {
           </div>
         )}
         {messages.map((m) => <MessageBubble key={m.id} message={m} />)}
-        {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
+        {isLoading && (
           <div className="rounded-xl bg-[#F6F8FB] p-3 max-w-[80%] animate-pulse text-sm text-slate-500">Thinking...</div>
         )}
       </div>

@@ -7,8 +7,17 @@ interface PolicyCardProps {
   effective_date: string | null;
   status: string;
   drug_count: number;
+  llm_provider: string | null;
   created_at: string;
+  updated_at: string | null;
 }
+
+const PROVIDER_LABELS: Record<string, string> = {
+  gemini: 'Gemini',
+  nvidia: 'NVIDIA',
+  groq: 'Groq',
+  ollama: 'Ollama',
+};
 
 const STATUS_COLORS: Record<string, string> = {
   indexed: 'border-emerald-300 bg-emerald-50 text-emerald-700',
@@ -38,7 +47,7 @@ const STATUS_LABELS: Record<string, string> = {
   indexing: 'Indexing...',
 };
 
-export function PolicyCard({ id, filename, payer_name, effective_date, status, drug_count, created_at }: PolicyCardProps) {
+export function PolicyCard({ id, filename, payer_name, effective_date, status, drug_count, llm_provider, created_at, updated_at }: PolicyCardProps) {
   const isProcessing = !['indexed', 'failed', 'pending'].includes(status);
   const colorClass = STATUS_COLORS[status] ?? 'border-slate-200 bg-slate-50 text-slate-600';
   const label = STATUS_LABELS[status] ?? status;
@@ -71,10 +80,18 @@ export function PolicyCard({ id, filename, payer_name, effective_date, status, d
               Eff. {effective_date}
             </span>
           )}
+          {llm_provider && (
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-mono text-slate-500">
+              {PROVIDER_LABELS[llm_provider] ?? llm_provider}
+            </span>
+          )}
         </div>
 
         <div className="text-xs text-slate-400">
-          Uploaded {new Date(created_at).toLocaleDateString()}
+          Uploaded {new Date(created_at).toLocaleString()}
+          {status === 'indexed' && updated_at && (
+            <> &middot; Indexed {new Date(updated_at).toLocaleString()}</>
+          )}
         </div>
       </div>
     </Link>

@@ -13,7 +13,7 @@ type PipelineStatus = {
 };
 
 export default function UploadPage() {
-  const [provider, setProvider] = useState<'gemini' | 'ollama' | 'groq'>('ollama');
+  const [provider, setProvider] = useState<'gemini' | 'ollama' | 'groq' | 'nvidia'>('ollama');
   const [uploading, setUploading] = useState(false);
   const [policyId, setPolicyId] = useState<string | null>(null);
   const [pipeline, setPipeline] = useState<PipelineStatus | null>(null);
@@ -78,7 +78,7 @@ export default function UploadPage() {
           <div className="mb-5 flex items-center gap-3">
             <span className="text-sm font-medium text-slate-600">LLM Provider:</span>
             <div className="flex rounded-xl border border-slate-200 bg-[#F6F8FB] p-0.5">
-              {(['gemini', 'groq', 'ollama'] as const).map((p) => (
+              {(['gemini', 'nvidia', 'groq', 'ollama'] as const).map((p) => (
                 <button
                   key={p}
                   onClick={() => setProvider(p)}
@@ -88,7 +88,7 @@ export default function UploadPage() {
                       : 'text-slate-500 hover:text-slate-700'
                   }`}
                 >
-                  {p === 'gemini' ? 'Gemini 2.5' : p === 'groq' ? 'Groq (fast)' : 'Ollama (local)'}
+                  {p === 'gemini' ? 'Gemini' : p === 'nvidia' ? 'NVIDIA' : p === 'groq' ? 'Groq' : 'Ollama'}
                 </button>
               ))}
             </div>
