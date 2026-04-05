@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter, Montserrat } from 'next/font/google';
 import { TopNav } from '@/components/layout/top-nav';
+import { ThemeProvider } from '@/components/theme-provider';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -21,10 +22,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${montserrat.variable}`}>
-      <body className="antialiased bg-[#F6F8FB] text-[#15173F] min-h-screen font-[var(--font-inter)]">
-        <TopNav />
-        {children}
+    <html lang="en" className={`${inter.variable} ${montserrat.variable}`} suppressHydrationWarning>
+      <body className="antialiased bg-[#F6F8FB] dark:bg-[#0F1117] text-[#15173F] dark:text-slate-200 min-h-screen font-[var(--font-inter)] transition-colors">
+        <ThemeProvider>
+          <TopNav />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

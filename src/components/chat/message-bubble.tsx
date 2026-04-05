@@ -1,6 +1,6 @@
 type Message = { id: string; role: 'user' | 'assistant'; content: string };
 
-export function MessageBubble({ message, dark }: { message: Message; dark?: boolean }) {
+export function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === 'user';
   return (
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>

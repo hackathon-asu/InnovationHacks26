@@ -28,7 +28,6 @@ export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showProviderMenu, setShowProviderMenu] = useState(false);
-  const [dark, setDark] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -80,32 +79,16 @@ export function ChatInterface() {
   const hasMessages = messages.length > 0;
 
   return (
-    <div className={dark ? 'dark' : ''}>
-      <div className="flex flex-1 flex-col min-h-screen bg-[#FAFBFD] dark:bg-[#0F1117]">
+    <div className="flex flex-1 flex-col min-h-screen bg-[#FAFBFD] dark:bg-[#0F1117]">
         {/* Top bar */}
         <header className="flex items-center justify-between border-b border-slate-200 dark:border-white/10 bg-white dark:bg-[#181A20] px-6 py-3">
           <div className="flex items-center gap-3">
-            <Link href="/" className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-            </Link>
             <div className="h-7 w-7 rounded-lg bg-[#15173F] dark:bg-[#91BFEB] flex items-center justify-center">
               <span className="text-[10px] font-bold text-white dark:text-[#15173F]">Rx</span>
             </div>
             <span className="text-sm font-semibold text-slate-800 dark:text-white">AntonRX Policy AI</span>
           </div>
           <div className="flex items-center gap-2">
-            {/* Dark mode toggle */}
-            <button
-              onClick={() => setDark(!dark)}
-              className="rounded-lg border border-slate-200 dark:border-white/10 p-1.5 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
-              title={dark ? 'Light mode' : 'Dark mode'}
-            >
-              {dark ? (
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
-              ) : (
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
-              )}
-            </button>
             <button
               onClick={() => { setMessages([]); setInput(''); }}
               className="rounded-lg border border-slate-200 dark:border-white/10 px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
@@ -147,7 +130,7 @@ export function ChatInterface() {
             </div>
           ) : (
             <div className="mx-auto max-w-3xl space-y-4 px-6 py-6">
-              {messages.map((m) => <MessageBubble key={m.id} message={m} dark={dark} />)}
+              {messages.map((m) => <MessageBubble key={m.id} message={m} />)}
               {isLoading && (
                 <div className="flex gap-3">
                   <div className="shrink-0 h-8 w-8 rounded-lg bg-[#15173F] dark:bg-[#91BFEB] flex items-center justify-center">
@@ -230,6 +213,5 @@ export function ChatInterface() {
           </div>
         </div>
       </div>
-    </div>
   );
 }
