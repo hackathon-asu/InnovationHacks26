@@ -14,6 +14,7 @@ interface PolicyCardProps {
 
 const PROVIDER_LABELS: Record<string, string> = {
   gemini: 'Gemini',
+  anthropic: 'Claude',
   nvidia: 'NVIDIA',
   groq: 'Groq',
   ollama: 'Ollama',

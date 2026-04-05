@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { MessageBubble } from './message-bubble';
 
 type Message = { id: string; role: 'user' | 'assistant'; content: string };
-type Provider = 'gemini' | 'nvidia' | 'groq' | 'ollama';
+type Provider = 'gemini' | 'anthropic' | 'nvidia' | 'groq' | 'ollama';
 
 export function ChatInterface() {
   const [input, setInput] = useState('');
@@ -57,7 +57,7 @@ export function ChatInterface() {
       <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
         <span className="text-xs font-medium text-slate-500">Model:</span>
         <div className="flex rounded-lg border border-slate-200 bg-[#F6F8FB] p-0.5">
-          {(['gemini', 'nvidia', 'groq', 'ollama'] as const).map((p) => (
+          {(['gemini', 'anthropic', 'nvidia', 'groq', 'ollama'] as const).map((p) => (
             <button
               key={p}
               onClick={() => setProvider(p)}
@@ -67,7 +67,7 @@ export function ChatInterface() {
                   : 'text-slate-500 hover:text-slate-700'
               }`}
             >
-              {p === 'gemini' ? 'Gemini' : p === 'nvidia' ? 'NVIDIA' : p === 'groq' ? 'Groq' : 'Ollama'}
+              {p === 'gemini' ? 'Gemini' : p === 'anthropic' ? 'Claude' : p === 'nvidia' ? 'NVIDIA' : p === 'groq' ? 'Groq' : 'Ollama'}
             </button>
           ))}
         </div>
