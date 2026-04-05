@@ -9,6 +9,16 @@ async function getStats() {
   }
 }
 
+async function getPolicies() {
+  try {
+    const res = await fetch('http://localhost:3000/api/policies', { cache: 'no-store' });
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
 async function getChanges() {
   try {
     const res = await fetch('http://localhost:3000/api/changes', { cache: 'no-store' });
@@ -19,105 +29,215 @@ async function getChanges() {
   }
 }
 
-export default async function DashboardPage() {
-  const [stats, changes] = await Promise.all([getStats(), getChanges()]);
+const STATUS_ICON: Record<string, string> = {
+  indexed: 'bg-emerald-100 text-emerald-600',
+  failed: 'bg-red-100 text-red-600',
+  pending: 'bg-amber-100 text-amber-600',
+};
 
-  const statCards = [
-    { value: stats.totalPolicies, label: 'Policies uploaded' },
-    { value: stats.totalDrugs, label: 'Drugs extracted' },
-    { value: stats.totalPlans, label: 'Plans compared' },
-    { value: stats.totalChanges, label: 'Policy changes' },
-  ];
+export default async function DashboardPage() {
+  const [stats, policies, changes] = await Promise.all([getStats(), getPolicies(), getChanges()]);
+
+  const indexed = policies.filter((p: Record<string, unknown>) => p.status === 'indexed');
+  const processing = policies.filter((p: Record<string, unknown>) => !['indexed', 'failed'].includes(String(p.status)));
+  const failed = policies.filter((p: Record<string, unknown>) => p.status === 'failed');
 
   return (
     <div>
-      {/* Hero */}
-      <section
-        className="relative overflow-hidden border-b border-slate-200"
-        style={{
-          backgroundImage: 'linear-gradient(rgba(21,23,63,0.55), rgba(21,23,63,0.45)), url("https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=1600&q=80")',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
-      >
-        <div className="mx-auto max-w-7xl px-6 py-16 md:py-20 space-y-8">
-          <div>
-            <div className="mb-4 inline-flex items-center rounded-full border border-white/30 bg-white/10 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur">
-              Medical Benefit Drug Policy Tracker
-            </div>
-            <h1 className="max-w-3xl text-3xl font-semibold leading-tight text-white md:text-5xl font-[var(--font-montserrat)]">
-              Compare drug coverage across health plans in one place.
-            </h1>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-slate-200">
-              Upload policy PDFs, let AI extract and normalize the rules, then compare coverage, prior auth, step therapy, and restrictions for any drug.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Link href="/upload" className="rounded-xl bg-[#91BFEB] px-5 py-3 text-sm font-semibold text-[#15173F] shadow-sm transition hover:opacity-90">
-                Upload Policies
-              </Link>
-              <Link href="/compare" className="rounded-xl border border-white/40 bg-white/10 px-5 py-3 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/15">
-                View Comparison
-              </Link>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            {statCards.map((item) => (
-              <div key={item.label} className="rounded-2xl border border-white/20 bg-white/90 p-5 shadow-lg backdrop-blur">
-                <div className="text-3xl font-bold text-[#15173F] font-[var(--font-montserrat)]">{item.value}</div>
-                <div className="mt-1 text-sm text-slate-600">{item.label}</div>
+      {/* Header */}
+      <section className="border-b border-slate-200 bg-[#15173F]">
+        <div className="mx-auto max-w-7xl px-6 py-10">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-sm text-[#91BFEB] font-medium">Medical Benefit Drug Policy Tracker</p>
+              <h1 className="mt-2 text-3xl font-bold text-white font-[var(--font-montserrat)]">
+                Policy Intelligence Dashboard
+              </h1>
+              <div className="mt-3 flex items-center gap-6 text-sm text-slate-300">
+                <span>{stats.totalPolicies} policies</span>
+                <span>{stats.totalDrugs} drugs</span>
+                <span>{stats.totalPlans} payers</span>
+                <span>{changes.length} changes</span>
               </div>
-            ))}
+            </div>
+            <div className="flex gap-2">
+              <Link href="/upload" className="rounded-xl bg-[#91BFEB] px-4 py-2.5 text-sm font-semibold text-[#15173F] hover:opacity-90 transition">
+                Upload PDF
+              </Link>
+              <Link href="/fetch" className="rounded-xl border border-white/30 px-4 py-2.5 text-sm font-semibold text-white hover:bg-white/10 transition">
+                Auto-Fetch
+              </Link>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Main */}
-      <main className="mx-auto max-w-7xl space-y-8 px-6 py-8">
-        {/* Recent changes */}
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <h2 className="text-2xl font-semibold font-[var(--font-montserrat)]">Recent policy changes</h2>
-              <p className="mt-1 text-sm text-slate-500">What changed across payer drug policies.</p>
+      {/* Two-column layout */}
+      <main className="mx-auto max-w-7xl px-6 py-6">
+        <div className="grid gap-6 lg:grid-cols-[1fr_0.85fr]">
+
+          {/* Left — Pipeline & Policies */}
+          <div className="space-y-5">
+            {/* Pipeline progress */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold font-[var(--font-montserrat)]">Ingested Policies</h2>
+                <span className="text-xs text-slate-400">{indexed.length}/{policies.length} indexed</span>
+              </div>
+
+              {/* Progress bar */}
+              <div className="h-2 rounded-full bg-slate-100 overflow-hidden mb-5">
+                <div
+                  className="h-full rounded-full bg-emerald-400 transition-all"
+                  style={{ width: policies.length ? `${(indexed.length / policies.length) * 100}%` : '0%' }}
+                />
+              </div>
+
+              {/* Policy list */}
+              <div className="space-y-2 max-h-[420px] overflow-y-auto">
+                {policies.length === 0 ? (
+                  <p className="text-sm text-slate-400 text-center py-6">No policies uploaded yet</p>
+                ) : (
+                  policies.slice(0, 10).map((p: Record<string, unknown>, i: number) => {
+                    const status = String(p.status ?? 'pending');
+                    const isIndexed = status === 'indexed';
+                    const isFailed = status === 'failed';
+                    const isProcessing = !isIndexed && !isFailed;
+                    return (
+                      <Link key={i} href={`/policies/${String(p.id)}`}>
+                        <div className={`flex items-center gap-3 rounded-xl p-3 transition-colors ${
+                          isIndexed ? 'hover:bg-emerald-50' : isFailed ? 'hover:bg-red-50' : 'hover:bg-blue-50'
+                        }`}>
+                          {/* Status icon */}
+                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                            isIndexed ? 'bg-emerald-100' : isFailed ? 'bg-red-100' : 'bg-blue-100'
+                          }`}>
+                            {isIndexed && <svg className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                            {isFailed && <svg className="h-4 w-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>}
+                            {isProcessing && <div className="h-4 w-4 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />}
+                          </div>
+                          {/* Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-slate-800 truncate">{String(p.payer_name || p.filename || 'Unknown')}</span>
+                              {p.llm_provider ? (
+                                <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono text-slate-500">{String(p.llm_provider)}</span>
+                              ) : null}
+                            </div>
+                            <p className="text-xs text-slate-400 truncate">{String(p.filename ?? '')}</p>
+                          </div>
+                          {/* Drug count */}
+                          {Number(p.drug_count) > 0 && (
+                            <span className="shrink-0 rounded-full border border-[#91BFEB] bg-[#dceeff] px-2 py-0.5 text-xs font-medium text-[#15173F]">
+                              {Number(p.drug_count)} drugs
+                            </span>
+                          )}
+                        </div>
+                      </Link>
+                    );
+                  })
+                )}
+              </div>
+
+              {policies.length > 10 && (
+                <Link href="/policies" className="mt-3 block text-center text-xs text-[#91BFEB] hover:underline">
+                  View all {policies.length} policies
+                </Link>
+              )}
             </div>
-            <Link href="/changes" className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
-              View all
-            </Link>
+
+            {/* Recent changes */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-semibold font-[var(--font-montserrat)]">Recent Changes</h2>
+                <Link href="/changes" className="text-xs text-[#91BFEB] hover:underline">View all</Link>
+              </div>
+              {changes.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-4">No changes recorded yet</p>
+              ) : (
+                <div className="space-y-2">
+                  {changes.slice(0, 4).map((c: Record<string, unknown>, i: number) => (
+                    <div key={i} className="flex items-start gap-3 rounded-xl bg-[#F6F8FB] p-3">
+                      <div className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-[#91BFEB]" />
+                      <div className="min-w-0">
+                        <span className="text-sm font-medium text-slate-700">{String(c.payerName ?? '')}</span>
+                        <p className="text-xs text-slate-500 truncate">{String(c.changeSummary ?? c.policyTitle ?? '')}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          {changes.length === 0 ? (
-            <p className="text-sm text-slate-500 py-4 text-center">No changes yet. Upload policies to start tracking.</p>
-          ) : (
-            <div className="space-y-3">
-              {changes.slice(0, 5).map((c: Record<string, unknown>, i: number) => (
-                <div key={i} className="flex items-start justify-between rounded-2xl border border-slate-200 px-4 py-3">
-                  <div>
-                    <span className="font-medium text-slate-800">{String(c.payerName ?? '')}</span>
-                    <span className="text-slate-400 mx-2">•</span>
-                    <span className="text-sm text-slate-500">{String(c.planName ?? '')}</span>
-                    <p className="text-sm text-slate-600 mt-0.5 max-w-xl truncate">{String(c.changeSummary ?? c.policyTitle ?? '')}</p>
+          {/* Right — Embedded ChatBot */}
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h2 className="text-lg font-semibold font-[var(--font-montserrat)]">Policy Q&A</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Ask about drug coverage across all indexed policies</p>
+            </div>
+
+            {/* Chat messages area */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {/* Welcome message */}
+              <div className="flex gap-3">
+                <div className="shrink-0 h-8 w-8 rounded-full bg-[#15173F] flex items-center justify-center text-white text-xs font-bold">AI</div>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-semibold text-slate-800">AntonRX AI</span>
+                    <span className="text-[10px] text-slate-400">just now</span>
+                  </div>
+                  <div className="rounded-xl bg-[#F6F8FB] p-3 text-sm text-slate-700 leading-relaxed">
+                    Welcome to <span className="font-semibold">AntonRX Policy Intelligence</span>. I can answer questions about drug coverage, prior auth criteria, step therapy, and policy differences across payers.
+                  </div>
+                  {/* Suggested questions */}
+                  <div className="mt-3 rounded-xl border border-[#91BFEB]/30 bg-[#dceeff]/30 p-3">
+                    <p className="text-xs font-medium text-slate-500 mb-2">Most asked questions:</p>
+                    <div className="space-y-1.5">
+                      {[
+                        'Which plans cover bevacizumab?',
+                        'Compare step therapy for Rituxan',
+                        'What prior auth does Cigna require for biologics?',
+                        'What changed in recent policy updates?',
+                      ].map((q) => (
+                        <Link key={q} href={`/chat`} className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-[#15173F] transition-colors">
+                          {q} <span className="text-[#91BFEB]">&rarr;</span>
+                        </Link>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              ))}
+              </div>
             </div>
-          )}
+
+            {/* Input */}
+            <div className="border-t border-slate-200 p-4">
+              <Link href="/chat" className="flex items-center gap-3">
+                <div className="flex-1 rounded-xl border border-slate-200 bg-[#F6F8FB] px-4 py-2.5 text-sm text-slate-400">
+                  Ask about drug coverage...
+                </div>
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#91BFEB] text-[#15173F] hover:opacity-90 transition">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
+                </div>
+              </Link>
+            </div>
+          </div>
+
         </div>
 
-        {/* Quick actions */}
-        <div className="grid gap-6 md:grid-cols-3">
-          <Link href="/drugs" className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow group">
-            <h3 className="text-lg font-semibold font-[var(--font-montserrat)] group-hover:text-[#91BFEB] transition-colors">Drug Search</h3>
-            <p className="mt-2 text-sm text-slate-500">Search by drug name or J-code to find coverage across all plans.</p>
-          </Link>
-          <Link href="/chat" className="rounded-3xl border border-slate-200 bg-[#15173F] p-6 shadow-sm hover:shadow-md transition-shadow text-white">
-            <h3 className="text-lg font-semibold font-[var(--font-montserrat)]">Ask AI</h3>
-            <p className="mt-2 text-sm text-white/70">Ask natural language questions about drug coverage policies with cited answers.</p>
-          </Link>
-          <Link href="/api-docs" className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow group">
-            <h3 className="text-lg font-semibold font-[var(--font-montserrat)] group-hover:text-[#91BFEB] transition-colors">API Documentation</h3>
-            <p className="mt-2 text-sm text-slate-500">Explore the unified API — 16 endpoints across Next.js and FastAPI.</p>
-          </Link>
+        {/* Quick action cards */}
+        <div className="mt-6 grid gap-4 md:grid-cols-4">
+          {[
+            { href: '/drugs', title: 'Drug Search', desc: 'Search by drug name or J-code', icon: 'search' },
+            { href: '/compare', title: 'Compare', desc: 'Side-by-side payer comparison', icon: 'compare' },
+            { href: '/fetch', title: 'Auto-Fetch', desc: 'Retrieve policies from payer sites', icon: 'fetch' },
+            { href: '/api-docs', title: 'API Docs', desc: '16 endpoints across the stack', icon: 'api' },
+          ].map((card) => (
+            <Link key={card.href} href={card.href} className="rounded-2xl border border-slate-200 bg-white p-4 hover:shadow-md hover:border-[#91BFEB]/50 transition-all group">
+              <h3 className="text-sm font-semibold text-slate-800 group-hover:text-[#15173F]">{card.title}</h3>
+              <p className="mt-1 text-xs text-slate-500">{card.desc}</p>
+            </Link>
+          ))}
         </div>
       </main>
     </div>
