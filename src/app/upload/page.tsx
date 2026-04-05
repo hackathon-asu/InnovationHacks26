@@ -71,7 +71,7 @@ export default function UploadPage() {
         <div className="rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#181A20] p-6 shadow-sm">
           <div className="mb-5">
             <h2 className="text-2xl font-semibold font-[var(--font-montserrat)] dark:text-white">Upload and ingest</h2>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Drop policy PDFs to extract drug rules and coverage criteria.</p>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Drop policy documents (PDF, DOCX, HTML, TXT) to extract drug rules and coverage criteria.</p>
           </div>
 
           {/* Model toggle */}
@@ -126,7 +126,7 @@ export default function UploadPage() {
           {/* Stage list */}
           <div className="mt-5 space-y-3">
             {(pipeline?.stages ?? defaultStages).map((s, i) => (
-              <div key={i} className="flex items-center gap-3">
+              <div key={`${s.stage}-${i}`} className="flex items-center gap-3">
                 <StageIcon status={s.status} index={i + 1} />
                 <div className="flex-1">
                   <div className={`text-sm font-medium ${
@@ -137,6 +137,9 @@ export default function UploadPage() {
                   }`}>{s.stage}</div>
                   {s.status === 'error' && s.message && (
                     <div className="text-xs text-red-500 dark:text-red-400 mt-0.5 line-clamp-2">{s.message}</div>
+                  )}
+                  {s.status === 'running' && s.message && (
+                    <div className="text-xs text-amber-500 dark:text-amber-400 mt-0.5 animate-pulse">{s.message}</div>
                   )}
                 </div>
                 {s.status === 'running' && (
@@ -165,7 +168,8 @@ export default function UploadPage() {
 
 const defaultStages: Stage[] = [
   { stage: 'Parse & OCR', status: 'pending' },
-  { stage: 'Gemini extraction', status: 'pending' },
+  { stage: 'NLP extraction', status: 'pending' },
+  { stage: 'LLM extraction', status: 'pending' },
   { stage: 'Save to PostgreSQL', status: 'pending' },
   { stage: 'Chunk document', status: 'pending' },
   { stage: 'Embed chunks', status: 'pending' },

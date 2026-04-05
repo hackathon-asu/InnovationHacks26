@@ -32,22 +32,23 @@ MAX_BYTES = settings.max_upload_size_mb * 1024 * 1024
 # Maps DB status values → pipeline stage breakdown for the frontend
 STATUS_STAGES = {
     "pending":           (0,  []),
-    "parsing":           (15, ["parse"]),
-    "nlp_extracting":    (25, ["parse"]),
-    "gemini_extracting": (35, ["parse"]),
-    "rxnorm":            (50, ["parse", "extract"]),
-    "saving_structured": (60, ["parse", "extract", "postgres"]),
-    "chunking":          (70, ["parse", "extract", "postgres", "chunk"]),
-    "embedding":         (82, ["parse", "extract", "postgres", "chunk", "embed"]),
-    "indexing":          (93, ["parse", "extract", "postgres", "chunk", "embed", "index"]),
-    "indexed":           (100, ["parse", "extract", "postgres", "chunk", "embed", "index", "rag"]),
+    "parsing":           (8,  []),
+    "nlp_extracting":    (20, ["parse"]),
+    "gemini_extracting": (35, ["parse", "nlp"]),
+    "rxnorm":            (48, ["parse", "nlp", "llm"]),
+    "saving_structured": (58, ["parse", "nlp", "llm", "postgres"]),
+    "chunking":          (68, ["parse", "nlp", "llm", "postgres", "chunk"]),
+    "embedding":         (80, ["parse", "nlp", "llm", "postgres", "chunk", "embed"]),
+    "indexing":          (92, ["parse", "nlp", "llm", "postgres", "chunk", "embed", "index"]),
+    "indexed":           (100, ["parse", "nlp", "llm", "postgres", "chunk", "embed", "index", "rag"]),
     "failed":            (0,  []),
 }
 
-ALL_STAGES = ["parse", "extract", "postgres", "chunk", "embed", "index", "rag"]
+ALL_STAGES = ["parse", "nlp", "llm", "postgres", "chunk", "embed", "index", "rag"]
 STAGE_LABELS = {
     "parse":    "Parse & OCR",
-    "extract":  "LLM extraction",
+    "nlp":      "NLP extraction",
+    "llm":      "LLM extraction",
     "postgres": "Save to PostgreSQL",
     "chunk":    "Chunk document",
     "embed":    "Embed chunks",
@@ -64,6 +65,10 @@ FAILED_STAGE_HINTS = {
     "index": ("index", "pgvector", "vector"),
     "rag": ("rag",),
 }
+
+
+# In-memory extraction progress tracker (reset on restart — fine for live status)
+from app.services.gemini_extractor import extraction_progress
 
 
 def _infer_failed_stage(policy: Policy) -> str:
@@ -173,10 +178,37 @@ async def get_pipeline_status(policy_id: uuid.UUID, db: AsyncSession = Depends(g
             else:
                 st = "pending"
 
+        # Show actual model name + section progress for the LLM stage
+        label = STAGE_LABELS[s]
+        msg = policy.error_message if st == "error" else None
+        if s == "llm" and policy.llm_provider:
+            provider_labels = {
+                "gemini": "Gemini",
+                "ollama": "Ollama (Qwen3)",
+                "groq": "Groq (Llama)",
+                "nvidia": "NVIDIA (DeepSeek)",
+                "anthropic": "Claude",
+            }
+            model_name = provider_labels.get(policy.llm_provider, policy.llm_provider)
+            # Add section progress if available
+            prog = extraction_progress.get(str(policy_id))
+            if prog and st == "running":
+                done_s = prog.get("sections_done", 0)
+                total_s = prog.get("sections_total", 0)
+                retries = prog.get("retries", 0)
+                if total_s > 0:
+                    label = f"{model_name} {done_s}/{total_s}"
+                else:
+                    label = f"{model_name} extraction"
+                if retries > 0:
+                    msg = f"Retrying section ({retries}x)..."
+            else:
+                label = f"{model_name} extraction"
+
         stages.append(PipelineStage(
-            stage=STAGE_LABELS[s],
+            stage=label,
             status=st,
-            message=policy.error_message if st == "error" else None,
+            message=msg,
         ))
 
     return PipelineStatus(
