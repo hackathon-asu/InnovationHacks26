@@ -46,7 +46,9 @@ export default async function PoliciesPage() {
               effective_date={p.effective_date ? String(p.effective_date) : null}
               status={String(p.status ?? 'pending')}
               drug_count={Number(p.drug_count ?? 0)}
+              llm_provider={p.llm_provider ? String(p.llm_provider) : null}
               created_at={String(p.created_at ?? new Date().toISOString())}
+              updated_at={p.updated_at ? String(p.updated_at) : null}
             />
           ))}
         </div>
