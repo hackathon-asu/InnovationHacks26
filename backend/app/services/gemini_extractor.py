@@ -409,7 +409,7 @@ def _split_into_sections(text: str, max_chars: int = 40_000) -> list[str]:
 
 def _split_into_sections_for_provider(text: str, provider: str | None) -> list[str]:
     if provider == "ollama":
-        return _split_into_sections(text, max_chars=12_000)
+        return _split_into_sections(text, max_chars=24_000)
     if provider == "groq":
         return _split_into_sections(text, max_chars=20_000)
     if provider == "nvidia":
@@ -477,7 +477,7 @@ async def _extract_section_ollama(section_text: str, hint_block: str) -> dict:
                         {"role": "user", "content": prompt},
                     ],
                     "stream": False,
-                    "options": {"temperature": 0, "num_predict": 16384, "num_ctx": 8192},
+                    "options": {"temperature": 0, "num_predict": 8192, "num_ctx": 32768},
                 },
             )
             resp.raise_for_status()
