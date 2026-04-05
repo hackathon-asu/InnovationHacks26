@@ -6,6 +6,7 @@ from app.core.logging import get_logger, setup_logging
 from app.db.session import init_db
 from app.api.routes import ingest
 from app.api.routes import query
+from app.api.routes import fetch
 
 settings = get_settings()
 setup_logging()
@@ -40,6 +41,7 @@ app.add_middleware(
 
 app.include_router(ingest.router, prefix="/api/v1")
 app.include_router(query.router, prefix="/api/v1")
+app.include_router(fetch.router, prefix="/api/v1")
 
 
 @app.get("/health")

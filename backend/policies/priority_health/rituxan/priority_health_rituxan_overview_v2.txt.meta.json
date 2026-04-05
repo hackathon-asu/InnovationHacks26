@@ -1,0 +1,12 @@
+{
+  "payer": "Priority Health",
+  "drug_name": "Rituxan",
+  "source_url": "https://www.priorityhealth.com/provider/manuals-forms/pharmacy/medical-drug-list",
+  "local_path": "policies/priority_health/rituxan/priority_health_rituxan_overview_v2.txt",
+  "content_type": "html",
+  "filename": "priority_health_rituxan_overview_v2.txt",
+  "file_hash": "061fba9a6a679eaae837e0c7c4417bbbce79483abb4e69d7a186e34713a01cfd",
+  "effective_date": null,
+  "retrieved_at": "2026-04-05T03:58:22.497222",
+  "is_new": true
+}
