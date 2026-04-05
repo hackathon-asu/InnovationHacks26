@@ -5,13 +5,13 @@ import { CoverageMatrix } from '@/components/drug/coverage-matrix';
 import { useComparison } from '@/hooks/use-comparison';
 
 export default function ComparePage() {
-  const [rxcui, setRxcui] = useState('');
-  const [activeRxcui, setActiveRxcui] = useState<string | null>(null);
-  const { comparisons, isLoading } = useComparison(activeRxcui);
+  const [drugName, setDrugName] = useState('');
+  const [activeDrug, setActiveDrug] = useState<string | null>(null);
+  const { comparisons, isLoading } = useComparison(activeDrug);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (rxcui.trim()) setActiveRxcui(rxcui.trim());
+    if (drugName.trim()) setActiveDrug(drugName.trim());
   }
 
   return (
@@ -24,10 +24,10 @@ export default function ComparePage() {
           </div>
           <form onSubmit={handleSubmit} className="flex w-full flex-col gap-3 lg:w-auto lg:flex-row">
             <input
-              value={rxcui}
-              onChange={(e) => setRxcui(e.target.value)}
+              value={drugName}
+              onChange={(e) => setDrugName(e.target.value)}
               className="min-w-[280px] rounded-xl border border-slate-200 px-4 py-3 outline-none placeholder:text-slate-400 focus:border-[#91BFEB] transition-colors"
-              placeholder="Search drug name or RxCUI"
+              placeholder="Enter drug name (e.g. bevacizumab, Avastin)"
             />
             <button type="submit" className="rounded-xl bg-[#15173F] px-5 py-3 text-sm font-semibold text-white hover:opacity-90 transition-opacity">
               Search
@@ -47,7 +47,7 @@ export default function ComparePage() {
 
         {isLoading && <p className="mt-6 text-sm text-slate-500">Loading coverage data...</p>}
 
-        {activeRxcui && !isLoading && (
+        {activeDrug && !isLoading && (
           <div className="mt-6">
             <CoverageMatrix comparisons={comparisons} />
           </div>

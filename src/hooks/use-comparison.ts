@@ -3,12 +3,12 @@
 import { useState, useEffect } from 'react';
 import type { ComparisonEntry } from '@/lib/types/comparison';
 
-export function useComparison(rxcui: string | null) {
+export function useComparison(drugName: string | null) {
   const [comparisons, setComparisons] = useState<ComparisonEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (!rxcui) {
+    if (!drugName) {
       setComparisons([]);
       return;
     }
@@ -16,16 +16,16 @@ export function useComparison(rxcui: string | null) {
     const controller = new AbortController();
     setIsLoading(true);
 
-    fetch(`/api/drugs/${rxcui}/coverage`, { signal: controller.signal })
+    fetch(`/api/drugs/${encodeURIComponent(drugName)}/coverage`, { signal: controller.signal })
       .then((res) => res.json())
-      .then((data) => setComparisons(data.comparisons))
+      .then((data) => setComparisons(data.comparisons ?? []))
       .catch((err) => {
         if (err.name !== 'AbortError') console.error(err);
       })
       .finally(() => setIsLoading(false));
 
     return () => controller.abort();
-  }, [rxcui]);
+  }, [drugName]);
 
   return { comparisons, isLoading };
 }

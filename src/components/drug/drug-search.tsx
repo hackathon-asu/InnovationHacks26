@@ -24,7 +24,7 @@ export function DrugSearch() {
       {results.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {results.map((drug, i) => (
-            <Link key={i} href={drug.rxcui ? `/drugs/${drug.rxcui}` : '#'}>
+            <Link key={i} href={`/compare?drug=${encodeURIComponent(drug.brandName ?? drug.genericName ?? '')}`}>
               <div className="rounded-2xl border border-slate-200 bg-white p-4 hover:shadow-md transition-shadow space-y-2">
                 <div>
                   <p className="font-semibold text-slate-800">{drug.brandName ?? drug.genericName ?? 'Unknown'}</p>
