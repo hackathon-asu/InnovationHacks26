@@ -15,7 +15,7 @@ export function Dropzone({ onUpload, isUploading }: DropzoneProps) {
     e.preventDefault();
     setDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file?.type === 'application/pdf') setSelectedFile(file);
+    if (file) setSelectedFile(file);
   }, []);
 
   return (
@@ -28,14 +28,18 @@ export function Dropzone({ onUpload, isUploading }: DropzoneProps) {
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
       >
-        <div className="mx-auto mb-3 h-12 w-12 rounded-2xl bg-[#dceeff] dark:bg-[#91BFEB]/20" />
-        <div className="text-lg font-semibold text-[#15173F] dark:text-white">
-          {dragOver ? 'Drop PDF here' : 'Drag and drop policy PDFs here'}
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#dceeff] dark:bg-[#91BFEB]/20">
+          <svg className="h-6 w-6 text-[#91BFEB]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+          </svg>
         </div>
-        <div className="mt-2 text-sm text-slate-500 dark:text-slate-400">Supports payer policy docs, updates, and versioned plan criteria</div>
+        <div className="text-lg font-semibold text-[#15173F] dark:text-white">
+          {dragOver ? 'Drop file here' : 'Drag and drop policy documents here'}
+        </div>
+        <div className="mt-2 text-sm text-slate-500 dark:text-slate-400">Supports PDF, DOCX, HTML, and TXT files</div>
         <input
           type="file"
-          accept=".pdf"
+          accept=".pdf,.docx,.doc,.html,.htm,.txt"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) setSelectedFile(f); }}
           className="absolute inset-0 cursor-pointer opacity-0"
         />
@@ -45,7 +49,7 @@ export function Dropzone({ onUpload, isUploading }: DropzoneProps) {
         <div className="flex items-center justify-between rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#181A20] px-4 py-3">
           <div>
             <div className="font-medium text-slate-800 dark:text-white">{selectedFile.name}</div>
-            <div className="text-sm text-slate-500 dark:text-slate-400">PDF • {(selectedFile.size / 1024 / 1024).toFixed(2)} MB</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">{selectedFile.name.split('.').pop()?.toUpperCase()} • {(selectedFile.size / 1024 / 1024).toFixed(2)} MB</div>
           </div>
           <button
             onClick={() => onUpload(selectedFile)}
