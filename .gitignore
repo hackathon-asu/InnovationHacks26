@@ -34,6 +34,16 @@ docs/examples/
 docs/hackathon/
 docs/screenshots/
 
+# AI tooling
+.claude/
+.codex/
+.claude-flow/
+.agents/
+CLAUDE.md
+AGENTS.md
+.mcp.json
+skills-lock.json
+
 # OS
 .DS_Store
 Thumbs.db
