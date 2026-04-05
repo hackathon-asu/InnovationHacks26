@@ -17,6 +17,8 @@ node_modules/
 # Uploads and data
 uploads/
 data/
+backend/policies/
+backend/uploads/
 
 # Environment — NEVER commit secrets
 .env
