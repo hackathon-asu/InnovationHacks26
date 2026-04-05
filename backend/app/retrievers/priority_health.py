@@ -1,35 +1,60 @@
+# --------0x0x0x0x0x0-----------
+# AntonRX - AI Policy Tracker
+# Written by Abhinav & Neeharika
+# CC BY-NC-SA 4.0
+# Commercial use: chatgpt@asu.edu
+# --------------------------------
 """
 Priority Health policy retriever.
 
-Priority Health consolidates ALL medical drug coverage into a single PDF:
-  2026 Commercial Medical Drug List (one document covering all drugs).
+Priority Health's site is Gatsby-rendered (JS-heavy), so direct HTML scraping
+of their policy listing pages doesn't work. However, their PDFs are served
+from predictable Sitecore media paths:
+
+  /-/media/priorityhealth/documents/medical-policies/{policy_number}.pdf
+  /-/media/{SITECORE_GUID}.pdf
 
 Strategy:
-  - Download the single consolidated PDF once (all drugs live in it)
-  - For specific drug queries, the file is still downloaded and handed
-    to the extraction pipeline which will extract the relevant sections
+  1. Try downloading the known consolidated prior auth criteria PDF (GUID-based)
+  2. Try the medical drug list page for any discoverable PDF links
+  3. Fall back to capturing page text as HTML snapshot
 
-This adapter is extremely reliable because there is no HTML parsing needed —
-it is a direct, known PDF download.
+The consolidated PA criteria document (~1.4MB) covers most drugs.
 """
 
 import re
 from pathlib import Path
+
+from bs4 import BeautifulSoup
 
 from app.core.logging import get_logger
 from app.retrievers.base import BasePolicyRetriever, FetchResult, build_client, compute_hash
 
 log = get_logger(__name__)
 
-# Direct link to Priority Health's 2026 commercial medical drug list PDF
-# This URL pattern has been stable across years; update annually if needed
-POLICY_PDF_URL = (
-    "https://www.priorityhealth.com/content/dam/provider/docs/public/"
-    "prior-auth/2026-PH-Medical-Drug-List.pdf"
-)
+BASE_URL = "https://www.priorityhealth.com"
 
-# Fallback: Priority Health provider prior-auth overview page (HTML)
-FALLBACK_URL = "https://www.priorityhealth.com/provider/manuals-forms/pharmacy/medical-drug-list"
+# Known consolidated PDFs (Sitecore media GUIDs, confirmed working 2026-04)
+KNOWN_PDFS = [
+    # Prior Auth Criteria document (~1.4MB, covers most drugs)
+    {
+        "url": f"{BASE_URL}/-/media/DAAE5553F48C4FDBA84BABBAE764BB84.pdf",
+        "name": "priority_health_prior_auth_criteria.pdf",
+        "desc": "Consolidated Prior Authorization Criteria",
+    },
+    # Second known PA criteria doc
+    {
+        "url": f"{BASE_URL}/-/media/81DACE8F00FF442799502209CC51780F.pdf",
+        "name": "priority_health_pa_criteria_2.pdf",
+        "desc": "Prior Authorization Criteria (alt)",
+    },
+]
+
+# Pages to try scraping for PDF links (may have some static links)
+SCRAPE_URLS = [
+    f"{BASE_URL}/formulary/medical-drug-list/commercial-mypriority-current-year",
+    f"{BASE_URL}/provider/manuals-forms/pharmacy/medical-drug-list",
+]
 
 
 class PriorityHealthRetriever(BasePolicyRetriever):
@@ -38,68 +63,80 @@ class PriorityHealthRetriever(BasePolicyRetriever):
     async def search_and_fetch(
         self, drug_name: str, store_dir: Path
     ) -> list[FetchResult]:
-        """
-        Download Priority Health's consolidated medical drug list PDF.
-        The same PDF covers all drugs, so drug_name is used only for
-        metadata tagging — the full document is returned every time.
-        """
         log.info("Priority Health retriever starting", drug=drug_name)
+        store_dir.mkdir(parents=True, exist_ok=True)
 
         async with build_client() as client:
-            # ── Try direct PDF download ────────────────────────────────────────
-            try:
-                resp = await client.get(POLICY_PDF_URL)
-                if resp.status_code == 200 and self._is_pdf(resp.content):
-                    log.info("Priority Health: PDF downloaded", size=len(resp.content))
-                    return [self._save_pdf(drug_name, POLICY_PDF_URL, resp.content, store_dir)]
-            except Exception as exc:
-                log.warning("Priority Health direct PDF failed", error=str(exc))
+            # ── Step 1: Try known consolidated PDFs ──────────────────────────
+            for pdf_info in KNOWN_PDFS:
+                try:
+                    resp = await client.get(pdf_info["url"])
+                    if resp.status_code == 200 and self._is_pdf(resp.content):
+                        log.info("Priority Health: consolidated PDF downloaded",
+                                 url=pdf_info["url"], size=len(resp.content))
+                        return [self._save_pdf(
+                            drug_name, pdf_info["url"], resp.content,
+                            store_dir, pdf_info["name"]
+                        )]
+                except Exception as exc:
+                    log.warning("Priority Health PDF failed", url=pdf_info["url"], error=str(exc))
 
-            # ── Fallback: capture the overview page as HTML ────────────────────
-            log.info("Priority Health: falling back to HTML snapshot", drug=drug_name)
-            try:
-                from bs4 import BeautifulSoup
-                resp = await client.get(FALLBACK_URL)
-                resp.raise_for_status()
-                soup = BeautifulSoup(resp.text, "lxml")
-                text = soup.get_text(" ", strip=True)
+            # ── Step 2: Try scraping pages for any PDF links ─────────────────
+            for page_url in SCRAPE_URLS:
+                try:
+                    resp = await client.get(page_url)
+                    if resp.status_code != 200:
+                        continue
 
-                slug = re.sub(r"[^a-z0-9]+", "_", drug_name.lower())
-                fname = f"priority_health_{slug}_overview.txt"
-                dest = store_dir / fname
-                dest.write_text(text[:50_000], encoding="utf-8")
+                    soup = BeautifulSoup(resp.text, "lxml")
 
-                return [FetchResult(
-                    payer=self.payer_name,
-                    drug_name=drug_name,
-                    source_url=FALLBACK_URL,
-                    local_path=dest,
-                    content_type="html",
-                    filename=fname,
-                    file_hash=compute_hash(text.encode()),
-                    effective_date=None,
-                    html_snapshot=text[:5_000],
-                )]
-            except Exception as exc:
-                log.error("Priority Health fallback also failed", error=str(exc))
-                return [self._error_result(
-                    drug_name, POLICY_PDF_URL,
-                    f"Priority Health unreachable: {exc}"
-                )]
+                    # Look for any PDF links on the page
+                    for tag in soup.find_all("a", href=True):
+                        href = tag["href"]
+                        if ".pdf" not in href.lower():
+                            continue
+                        # Check if link text or href mentions the drug
+                        text = tag.get_text(" ", strip=True).lower()
+                        drug_lower = drug_name.lower()
+                        if drug_lower in text or drug_lower in href.lower():
+                            full_url = href if href.startswith("http") else BASE_URL + href
+                            try:
+                                pdf_resp = await client.get(full_url)
+                                if pdf_resp.status_code == 200 and self._is_pdf(pdf_resp.content):
+                                    return [self._save_pdf(
+                                        drug_name, full_url, pdf_resp.content, store_dir
+                                    )]
+                            except Exception:
+                                continue
+
+                    # No drug-specific PDF found but page loaded — capture as HTML
+                    log.info("Priority Health: page loaded but no drug PDF, capturing HTML", url=page_url)
+                    return [self._html_fallback(drug_name, page_url, resp.text, store_dir)]
+
+                except Exception as exc:
+                    log.warning("Priority Health page scrape failed", url=page_url, error=str(exc))
+
+            # ── Step 3: Everything failed ────────────────────────────────────
+            return [self._error_result(
+                drug_name, KNOWN_PDFS[0]["url"],
+                "Priority Health: all PDF sources and fallback pages unreachable"
+            )]
 
     def _is_pdf(self, content: bytes) -> bool:
-        """Quick magic-byte check — PDFs start with %PDF."""
-        return content[:4] == b"%PDF"
+        return len(content) > 1000 and content[:4] == b"%PDF"
 
     def _save_pdf(
-        self, drug_name: str, url: str, content: bytes, store_dir: Path
+        self, drug_name: str, url: str, content: bytes,
+        store_dir: Path, filename: str | None = None
     ) -> FetchResult:
-        """
-        Save the consolidated PDF. Filename is payer-level, not drug-level,
-        because this single document covers all medical benefit drugs.
-        """
-        fname = "priority_health_2026_medical_drug_list.pdf"
-        dest = store_dir / fname
+        if not filename:
+            url_filename = url.rstrip("/").split("/")[-1].split("?")[0]
+            if not url_filename.lower().endswith(".pdf"):
+                slug = re.sub(r"[^a-z0-9]+", "_", drug_name.lower())
+                url_filename = f"priority_health_{slug}_policy.pdf"
+            filename = url_filename
+
+        dest = store_dir / filename
         dest.write_bytes(content)
 
         return FetchResult(
@@ -108,8 +145,30 @@ class PriorityHealthRetriever(BasePolicyRetriever):
             source_url=url,
             local_path=dest,
             content_type="pdf",
-            filename=fname,
+            filename=filename,
             file_hash=compute_hash(content),
-            # Effective date embedded in filename
             effective_date="2026",
+        )
+
+    def _html_fallback(
+        self, drug_name: str, url: str, html: str, store_dir: Path
+    ) -> FetchResult:
+        soup = BeautifulSoup(html, "lxml")
+        text = soup.get_text(" ", strip=True)
+
+        slug = re.sub(r"[^a-z0-9]+", "_", drug_name.lower())
+        fname = f"priority_health_{slug}_overview_v2.txt"
+        dest = store_dir / fname
+        dest.write_text(text[:50_000], encoding="utf-8")
+
+        return FetchResult(
+            payer=self.payer_name,
+            drug_name=drug_name,
+            source_url=url,
+            local_path=dest,
+            content_type="html",
+            filename=fname,
+            file_hash=compute_hash(text.encode()),
+            effective_date=None,
+            html_snapshot=text[:5_000],
         )
