@@ -27,10 +27,10 @@ export function TopNav() {
   const { theme, toggle } = useTheme();
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-white/10 bg-white/90 dark:bg-[#181A20]/90 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-slate-200/60 dark:border-white/10 bg-[#F5F3EF]/90 dark:bg-[#181A20]/90 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
         <div className="flex items-center gap-3">
-          <Link href="/" className="text-2xl font-semibold tracking-tight font-[var(--font-montserrat)] dark:text-white">
+          <Link href="/demo" className="text-2xl font-semibold tracking-tight font-[var(--font-montserrat)] dark:text-white">
             ANTON<span className="text-[#91BFEB]">RX</span>
           </Link>
           <span className="hidden rounded-full bg-[#dceeff] dark:bg-[#91BFEB]/15 px-3 py-1 text-xs font-medium text-[#15173F] dark:text-[#91BFEB] md:block">

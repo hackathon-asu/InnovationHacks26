@@ -83,7 +83,7 @@ export default function UploadPage() {
           {/* Model toggle */}
           <div className="mb-5 flex items-center gap-3">
             <span className="text-sm font-medium text-slate-600 dark:text-slate-400">LLM Provider:</span>
-            <div className="flex rounded-xl border border-slate-200 dark:border-white/10 bg-[#F6F8FB] dark:bg-white/5 p-0.5">
+            <div className="flex rounded-xl border border-slate-200 dark:border-white/10 bg-[#F0EDE8] dark:bg-white/5 p-0.5">
               {(['gemini', 'anthropic', 'nvidia', 'groq', 'ollama'] as const).map((p) => (
                 <button
                   key={p}

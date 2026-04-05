@@ -159,7 +159,7 @@ export function ChatInterface() {
         {/* Input area */}
         <div className="border-t border-slate-200 dark:border-white/10 bg-white dark:bg-[#181A20] px-6 py-4">
           <div className="mx-auto max-w-3xl">
-            <div className="relative rounded-2xl border border-slate-200 dark:border-white/10 bg-[#F6F8FB] dark:bg-[#0F1117] focus-within:border-[#91BFEB] focus-within:ring-2 focus-within:ring-[#91BFEB]/20 transition-all">
+            <div className="relative rounded-2xl border border-slate-200 dark:border-white/10 bg-[#F0EDE8] dark:bg-[#0F1117] focus-within:border-[#91BFEB] focus-within:ring-2 focus-within:ring-[#91BFEB]/20 transition-all">
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -191,7 +191,7 @@ export function ChatInterface() {
                           onClick={() => { setProvider(key); setShowProviderMenu(false); }}
                           className={`flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors ${
                             provider === key
-                              ? 'bg-[#F6F8FB] dark:bg-white/5 text-[#15173F] dark:text-white font-semibold'
+                              ? 'bg-[#F0EDE8] dark:bg-white/5 text-[#15173F] dark:text-white font-semibold'
                               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'
                           }`}
                         >

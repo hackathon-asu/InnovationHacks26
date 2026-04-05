@@ -45,7 +45,7 @@ export function ChangeTimeline({ changes }: { changes: PolicyChange[] }) {
             {diffs && diffs.length > 0 && (
               <div className="space-y-2 pt-1">
                 {diffs.map((diff, j) => (
-                  <div key={j} className="flex items-start gap-2 text-sm rounded-xl bg-[#F6F8FB] dark:bg-white/5 p-3">
+                  <div key={j} className="flex items-start gap-2 text-sm rounded-xl bg-[#F0EDE8] dark:bg-white/5 p-3">
                     <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold ${
                       diff.significance === 'breaking' ? 'border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 text-red-800 dark:text-red-400' :
                       diff.significance === 'material' ? 'border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-400' :

@@ -36,7 +36,7 @@ export function CoverageMatrix({ comparisons }: { comparisons: ComparisonEntry[]
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#181A20]">
-      <div className="grid grid-cols-7 gap-3 border-b border-slate-200 dark:border-white/10 bg-[#F6F8FB] dark:bg-white/5 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+      <div className="grid grid-cols-7 gap-3 border-b border-slate-200 dark:border-white/10 bg-[#F0EDE8] dark:bg-white/5 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
         <div>Plan</div>
         <div>Coverage</div>
         <div>Prior Auth</div>

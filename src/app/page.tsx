@@ -157,7 +157,7 @@ export default async function DashboardPage() {
               ) : (
                 <div className="space-y-2">
                   {changes.slice(0, 4).map((c: Record<string, unknown>, i: number) => (
-                    <div key={i} className="flex items-start gap-3 rounded-xl bg-[#F6F8FB] dark:bg-white/5 p-3">
+                    <div key={i} className="flex items-start gap-3 rounded-xl bg-[#F0EDE8] dark:bg-white/5 p-3">
                       <div className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-[#91BFEB]" />
                       <div className="min-w-0">
                         <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{String(c.payerName ?? '')}</span>
@@ -187,7 +187,7 @@ export default async function DashboardPage() {
                     <span className="text-sm font-semibold text-slate-800 dark:text-white">AntonRX AI</span>
                     <span className="text-[10px] text-slate-400">just now</span>
                   </div>
-                  <div className="rounded-xl bg-[#F6F8FB] dark:bg-white/5 p-3 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                  <div className="rounded-xl bg-[#F0EDE8] dark:bg-white/5 p-3 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
                     Welcome to <span className="font-semibold">AntonRX Policy Intelligence</span>. I can answer questions about drug coverage, prior auth criteria, step therapy, and policy differences across payers.
                   </div>
                   {/* Suggested questions */}
@@ -213,7 +213,7 @@ export default async function DashboardPage() {
             {/* Input */}
             <div className="border-t border-slate-200 dark:border-white/10 p-4">
               <Link href="/chat" className="flex items-center gap-3">
-                <div className="flex-1 rounded-xl border border-slate-200 dark:border-white/10 bg-[#F6F8FB] dark:bg-white/5 px-4 py-2.5 text-sm text-slate-400">
+                <div className="flex-1 rounded-xl border border-slate-200 dark:border-white/10 bg-[#F0EDE8] dark:bg-white/5 px-4 py-2.5 text-sm text-slate-400">
                   Ask about drug coverage...
                 </div>
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#91BFEB] text-[#15173F] hover:opacity-90 transition">

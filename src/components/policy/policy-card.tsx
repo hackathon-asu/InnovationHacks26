@@ -83,7 +83,7 @@ export function PolicyCard({ id, filename, payer_name, effective_date, status, d
             </span>
           )}
           {effective_date && (
-            <span className="rounded-full border border-slate-200 dark:border-white/10 bg-[#F6F8FB] dark:bg-white/5 px-2 py-0.5 text-xs text-slate-600 dark:text-slate-400">
+            <span className="rounded-full border border-slate-200 dark:border-white/10 bg-[#F0EDE8] dark:bg-white/5 px-2 py-0.5 text-xs text-slate-600 dark:text-slate-400">
               Eff. {effective_date}
             </span>
           )}

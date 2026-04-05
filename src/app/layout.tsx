@@ -52,7 +52,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${inter.variable} ${montserrat.variable}`} suppressHydrationWarning>
-      <body className="antialiased bg-[#F6F8FB] dark:bg-[#0F1117] text-[#15173F] dark:text-slate-200 min-h-screen font-[var(--font-inter)] transition-colors">
+      <body className="antialiased bg-[#F5F3EF] dark:bg-[#0F1117] text-[#15173F] dark:text-slate-200 min-h-screen font-[var(--font-inter)] transition-colors">
         <ThemeProvider>
           <TopNav />
           {children}
