@@ -6,9 +6,11 @@
  * -------------------------------- */
 import Link from 'next/link';
 
+const FASTAPI = process.env.FASTAPI_URL ?? 'http://localhost:8000';
+
 async function getStats() {
   try {
-    const res = await fetch('http://localhost:3000/api/stats', { cache: 'no-store' });
+    const res = await fetch(`${FASTAPI}/api/v1/ingest/stats`, { cache: 'no-store' });
     return res.json();
   } catch {
     return { totalDrugs: 0, totalPlans: 0, totalPolicies: 0, totalChanges: 0 };
@@ -17,7 +19,7 @@ async function getStats() {
 
 async function getPolicies() {
   try {
-    const res = await fetch('http://localhost:3000/api/policies', { cache: 'no-store' });
+    const res = await fetch(`${FASTAPI}/api/v1/ingest/policies`, { cache: 'no-store' });
     const data = await res.json();
     return Array.isArray(data) ? data : [];
   } catch {
@@ -27,7 +29,7 @@ async function getPolicies() {
 
 async function getChanges() {
   try {
-    const res = await fetch('http://localhost:3000/api/changes', { cache: 'no-store' });
+    const res = await fetch(`${FASTAPI}/api/v1/ingest/changes`, { cache: 'no-store' });
     const data = await res.json();
     return data.changes ?? [];
   } catch {

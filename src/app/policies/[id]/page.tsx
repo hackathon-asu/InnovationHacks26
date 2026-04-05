@@ -6,9 +6,11 @@
  * -------------------------------- */
 import { notFound } from 'next/navigation';
 
+const FASTAPI = process.env.FASTAPI_URL ?? 'http://localhost:8000';
+
 async function getPolicy(id: string) {
   try {
-    const res = await fetch(`http://localhost:3000/api/policies/${id}`, { cache: 'no-store' });
+    const res = await fetch(`${FASTAPI}/api/v1/ingest/policies/${id}`, { cache: 'no-store' });
     if (!res.ok) return null;
     return res.json();
   } catch {

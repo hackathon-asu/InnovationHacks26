@@ -6,9 +6,11 @@
  * -------------------------------- */
 import { ChangeTimeline } from '@/components/changes/change-timeline';
 
+const FASTAPI = process.env.FASTAPI_URL ?? 'http://localhost:8000';
+
 async function getChanges() {
   try {
-    const res = await fetch('http://localhost:3000/api/changes', { cache: 'no-store' });
+    const res = await fetch(`${FASTAPI}/api/v1/ingest/changes`, { cache: 'no-store' });
     const data = await res.json();
     return data.changes ?? [];
   } catch {

@@ -7,9 +7,11 @@
 import { PolicyCard } from '@/components/policy/policy-card';
 import Link from 'next/link';
 
+const FASTAPI = process.env.FASTAPI_URL ?? 'http://localhost:8000';
+
 async function getPolicies() {
   try {
-    const res = await fetch('http://localhost:3000/api/policies', { cache: 'no-store' });
+    const res = await fetch(`${FASTAPI}/api/v1/ingest/policies`, { cache: 'no-store' });
     const data = await res.json();
     return Array.isArray(data) ? data : [];
   } catch {
