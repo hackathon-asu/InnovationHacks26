@@ -456,7 +456,14 @@ async def _extract_section(model, section_text: str, hint_block: str) -> dict:
 )
 async def _extract_section_ollama(section_text: str, hint_block: str) -> dict:
     """Extract structured data from a single section of the policy (Ollama path)."""
-    prompt = f"{hint_block}\n\nPOLICY DOCUMENT SECTION:\n\n{section_text}"
+    # Reinforce key instructions for smaller models
+    reinforcement = (
+        "CRITICAL REMINDERS:\n"
+        "- payer_name MUST be a non-empty string (e.g. 'UnitedHealthcare', 'Cigna', 'Blue Cross'). Look at the document header/title.\n"
+        "- Extract EVERY drug mentioned. Do not skip any.\n"
+        "- Return ONLY valid JSON. No thinking, no explanation, no markdown.\n\n"
+    )
+    prompt = f"{reinforcement}{hint_block}\n\nPOLICY DOCUMENT SECTION:\n\n{section_text}"
 
     async with _llm_semaphore:
         async with httpx.AsyncClient(timeout=600.0) as client:
@@ -470,7 +477,7 @@ async def _extract_section_ollama(section_text: str, hint_block: str) -> dict:
                         {"role": "user", "content": prompt},
                     ],
                     "stream": False,
-                    "options": {"temperature": 0, "num_predict": 16384},
+                    "options": {"temperature": 0, "num_predict": 16384, "num_ctx": 8192},
                 },
             )
             resp.raise_for_status()
