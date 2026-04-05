@@ -140,11 +140,12 @@ async def run_ingestion_pipeline(
             provider=provider,
             filename=policy_for_extraction.filename,
             fetch_hints=fetch_hints,
+            policy_id=str(policy_id),
         )
 
         # ── Stage 4: RxNorm normalization ─────────────────────────────────────
         await _set_status(policy_id, "rxnorm")
-        drug_names = [d.drug_brand_name for d in extracted.drug_coverages]
+        drug_names = [d.drug_brand_name for d in extracted.drug_coverages if d.drug_brand_name]
         if extracted.drug_coverages:
             normalized = await normalize_drug_list(drug_names)
         else:
