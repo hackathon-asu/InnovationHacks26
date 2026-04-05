@@ -1,3 +1,9 @@
+/* --------0x0x0x0x0x0-----------
+ * AntonRX - AI Policy Tracker
+ * Written by Abhinav & Neeharika
+ * CC BY-NC-SA 4.0
+ * Commercial use: chatgpt@asu.edu
+ * -------------------------------- */
 import Link from 'next/link';
 
 async function getStats() {
@@ -86,7 +92,7 @@ export default async function DashboardPage() {
               </div>
 
               {/* Policy list */}
-              <div className="space-y-2 max-h-[420px] overflow-y-auto">
+              <div className="space-y-2 max-h-[420px] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {policies.length === 0 ? (
                   <p className="text-sm text-slate-400 dark:text-slate-500 text-center py-6">No policies uploaded yet</p>
                 ) : (
@@ -113,7 +119,7 @@ export default async function DashboardPage() {
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{String(p.payer_name || p.filename || 'Unknown')}</span>
                               {p.llm_provider ? (
-                                <span className="shrink-0 rounded bg-slate-100 dark:bg-white/10 px-1.5 py-0.5 text-[10px] font-mono text-slate-500 dark:text-slate-400">{String(p.llm_provider)}</span>
+                                <span className="shrink-0 rounded bg-slate-100 dark:bg-white/10 px-1.5 py-0.5 text-[10px] font-mono text-slate-500 dark:text-slate-400">{String(p.llm_provider).replace('claude-direct', 'anthropic')}</span>
                               ) : null}
                             </div>
                             <p className="text-xs text-slate-400 truncate">{String(p.filename ?? '')}</p>
