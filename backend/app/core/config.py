@@ -42,6 +42,12 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+asyncpg://neondb_owner:password@localhost:5432/neondb"
 
+    # Google Programmable Search Engine (Custom Search JSON API)
+    # Create an engine at https://programmablesearchengine.google.com/
+    # Get an API key at https://console.cloud.google.com/ → Custom Search API
+    google_cse_key: str = ""
+    google_cse_id: str = ""
+
     upload_dir: Path = Path("uploads")
     max_upload_size_mb: int = 50
 

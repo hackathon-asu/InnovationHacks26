@@ -31,7 +31,10 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
 from app.core.logging import get_logger
-from app.retrievers.base import BasePolicyRetriever, FetchResult, build_client, compute_hash
+from app.retrievers.base import (
+    BasePolicyRetriever, FetchResult, SearchResult,
+    build_client, compute_hash, google_cse_search, DRUG_ALIASES,
+)
 
 log = get_logger(__name__)
 
@@ -53,6 +56,27 @@ class UHCRetriever(BasePolicyRetriever):
         store_dir.mkdir(parents=True, exist_ok=True)
 
         async with build_client() as client:
+            # ── Phase 0: Google Custom Search ────────────────────────────────
+            raw = drug_name.lower().strip()
+            alias = DRUG_ALIASES.get(raw.split()[0], "")
+            names = [drug_name] + ([alias] if alias else [])
+            cse_queries = [
+                f'UnitedHealthcare "{n}" drug policy filetype:pdf'
+                for n in names
+            ]
+            for q in cse_queries:
+                for result in await google_cse_search(client, q):
+                    url = result.url
+                    if "uhcprovider.com" not in url.lower() or not url.lower().endswith(".pdf"):
+                        continue
+                    try:
+                        pdf_resp = await client.get(url)
+                        if pdf_resp.status_code == 200 and pdf_resp.content[:4] == b"%PDF":
+                            log.info("UHC: PDF found via Google CSE", url=url)
+                            return [self._save_pdf(drug_name, url, pdf_resp.content, store_dir)]
+                    except Exception as exc:
+                        log.warning("UHC: CSE PDF download failed", url=url, error=str(exc))
+
             # ── Step 1: Fetch index page ─────────────────────────────────────
             try:
                 resp = await client.get(INDEX_URL)

@@ -39,6 +39,10 @@ type FetchResponse = {
 const PROVIDER_OPTIONS = ['gemini', 'ollama', 'groq', 'nvidia', 'anthropic'] as const;
 type Provider = (typeof PROVIDER_OPTIONS)[number];
 
+function isSelectable(r: ResultEntry) {
+  return r.content_type !== 'error' && !!r.local_path;
+}
+
 export default function FetchPage() {
   const [payers, setPayers] = useState<Payer[]>([]);
   const [selectedPayers, setSelectedPayers] = useState<string[]>([]);
@@ -48,7 +52,10 @@ export default function FetchPage() {
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<FetchResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [ingesting, setIngesting] = useState<Set<number>>(new Set());
+
+  // Selection model
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const [ingesting, setIngesting] = useState(false);
   const [ingested, setIngested] = useState<Set<number>>(new Set());
 
   useEffect(() => {
@@ -61,10 +68,45 @@ export default function FetchPage() {
       .catch(() => {});
   }, []);
 
+  // Auto-select all valid results when a new fetch response arrives
+  useEffect(() => {
+    if (!response) return;
+    const valid = new Set(
+      response.results
+        .map((r, i) => (isSelectable(r) ? i : -1))
+        .filter((i) => i !== -1)
+    );
+    setSelectedIndices(valid);
+    setIngested(new Set());
+  }, [response]);
+
   function togglePayer(key: string) {
     setSelectedPayers((prev) =>
       prev.includes(key) ? prev.filter((p) => p !== key) : [...prev, key]
     );
+  }
+
+  function toggleSelect(index: number) {
+    setSelectedIndices((prev) => {
+      const next = new Set(prev);
+      next.has(index) ? next.delete(index) : next.add(index);
+      return next;
+    });
+  }
+
+  function selectAll() {
+    if (!response) return;
+    setSelectedIndices(
+      new Set(
+        response.results
+          .map((r, i) => (isSelectable(r) && !ingested.has(i) ? i : -1))
+          .filter((i) => i !== -1)
+      )
+    );
+  }
+
+  function selectNone() {
+    setSelectedIndices(new Set());
   }
 
   async function handleFetch() {
@@ -74,7 +116,7 @@ export default function FetchPage() {
     setLoading(true);
     setError(null);
     setResponse(null);
-    setIngesting(new Set());
+    setSelectedIndices(new Set());
     setIngested(new Set());
 
     try {
@@ -93,70 +135,67 @@ export default function FetchPage() {
     }
   }
 
-  async function handleIngest(result: ResultEntry, index: number) {
-    if (!result.local_path || ingesting.has(index) || ingested.has(index)) return;
+  async function handleIngestSelected() {
+    if (!response || selectedIndices.size === 0 || ingesting) return;
+    setIngesting(true);
 
-    setIngesting((prev) => new Set(prev).add(index));
-    try {
-      const res = await fetch('/api/fetch/ingest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          local_path: result.local_path,
-          payer: result.payer,
-          filename: result.filename,
-          provider,
-          source_url: result.source_url,
-          file_hash: result.file_hash,
-          effective_date: result.effective_date,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok && data.policy_id) {
-        setIngested((prev) => new Set(prev).add(index));
-        // Update the result with the policy_id
-        if (response) {
-          const updated = { ...response };
-          updated.results[index].policy_id = data.policy_id;
-          setResponse(updated);
+    const toIngest = [...selectedIndices].filter(
+      (i) => !ingested.has(i) && isSelectable(response.results[i])
+    );
+
+    await Promise.all(
+      toIngest.map(async (i) => {
+        const r = response.results[i];
+        try {
+          const res = await fetch('/api/fetch/ingest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              local_path: r.local_path,
+              payer: r.payer,
+              filename: r.filename,
+              provider,
+              source_url: r.source_url,
+              file_hash: r.file_hash,
+              effective_date: r.effective_date,
+            }),
+          });
+          const data = await res.json();
+          if (res.ok && data.policy_id) {
+            setIngested((prev) => new Set(prev).add(i));
+            setResponse((prev) => {
+              if (!prev) return prev;
+              const updated = { ...prev, results: [...prev.results] };
+              updated.results[i] = { ...updated.results[i], policy_id: data.policy_id };
+              return updated;
+            });
+          }
+        } catch {
+          // silently fail per-item
         }
-      }
-    } catch {
-      // silently fail
-    } finally {
-      setIngesting((prev) => {
-        const next = new Set(prev);
-        next.delete(index);
-        return next;
-      });
-    }
-  }
+      })
+    );
 
-  async function handleIngestAll() {
-    if (!response) return;
-    const eligible = response.results
-      .map((r, i) => ({ r, i }))
-      .filter(({ r, i }) => r.is_new && !r.error && r.local_path && !ingested.has(i));
-
-    for (const { r, i } of eligible) {
-      await handleIngest(r, i);
-    }
+    setIngesting(false);
   }
 
   const done = response?.status === 'complete';
-  const eligibleCount = response?.results.filter((r, i) => r.is_new && !r.error && r.local_path && !ingested.has(i)).length ?? 0;
+  const selectableCount = response?.results.filter((r, i) => isSelectable(r) && !ingested.has(i)).length ?? 0;
+  const pendingSelected = [...selectedIndices].filter(
+    (i) => response && isSelectable(response.results[i]) && !ingested.has(i)
+  ).length;
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-8 space-y-8">
-      {/* ── Hero header ──────────────────────────────────────────────── */}
       <div className="rounded-3xl border border-slate-200 dark:border-white/[0.06] bg-white dark:bg-[#181A20] p-8 shadow-sm dark:shadow-2xl dark:shadow-black/20">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="text-3xl font-bold font-[var(--font-montserrat)] text-slate-900 dark:text-white">
+            <h1 className="text-3xl font-bold font-[var(--font-montserrat)] text-slate-900 dark:text-white">
               Auto-Fetch Policies
-            </h2>
+            </h1>
             <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-md">
-              Retrieve the newest policy documents directly from payer websites. Review fetched files, then choose which to send through the AI pipeline.
+              Retrieve policy documents from payer websites. Review what was fetched, select the files you want,
+              then send them to the AI pipeline.
             </p>
           </div>
 
@@ -183,7 +222,6 @@ export default function FetchPage() {
           </form>
         </div>
 
-        {/* Quick stats */}
         <div className="mt-6 flex gap-6 border-t border-slate-100 dark:border-white/5 pt-5">
           <div>
             <p className="text-2xl font-bold text-slate-900 dark:text-white font-[var(--font-montserrat)]">{payers.length}</p>
@@ -246,7 +284,7 @@ export default function FetchPage() {
           {/* Provider selector */}
           <div>
             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-              LLM Provider (for ingestion)
+              LLM Provider (for indexing)
             </label>
             <div className="flex flex-wrap gap-2">
               {PROVIDER_OPTIONS.map((opt) => (
@@ -274,8 +312,11 @@ export default function FetchPage() {
               className="h-4 w-4 rounded border-slate-300 accent-[#91BFEB]"
             />
             <div>
-              <div className="text-sm font-medium text-slate-800 dark:text-white">Auto-ingest new files</div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">Automatically start the AI pipeline for all new files. Uncheck to review first.</div>
+              <div className="text-sm font-medium text-slate-800 dark:text-white">Auto-index new files</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                Skip review — every new valid file goes straight into the AI pipeline after fetching.
+                Leave unchecked to review and choose which files to send.
+              </div>
             </div>
           </label>
 
@@ -295,7 +336,7 @@ export default function FetchPage() {
         </div>
 
         {/* Right — Results */}
-        <div className="space-y-4">
+        <div className="space-y-3">
           {!response && !loading && (
             <div className="rounded-3xl border border-dashed border-slate-300 dark:border-white/10 bg-white dark:bg-[#181A20] p-8 text-center">
               <p className="text-slate-400 dark:text-slate-500 text-sm">
@@ -318,36 +359,21 @@ export default function FetchPage() {
               <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#181A20] p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-slate-800 dark:text-white">
-                      {response.drug_name}
-                    </p>
+                    <p className="text-sm font-semibold text-slate-800 dark:text-white">{response.drug_name}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      {response.new_files} new{' '}
-                      {response.new_files === 1 ? 'file' : 'files'} retrieved
+                      {response.new_files} new {response.new_files === 1 ? 'file' : 'files'} retrieved
                       {response.errors > 0 && ` · ${response.errors} error(s)`}
                     </p>
                   </div>
-                  <span
-                    className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                      response.errors === 0
-                        ? 'bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400'
-                        : 'bg-yellow-50 dark:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
-                    }`}
-                  >
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                    response.errors === 0
+                      ? 'bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400'
+                      : 'bg-yellow-50 dark:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
+                  }`}>
                     {response.errors === 0 ? 'All OK' : 'Partial'}
                   </span>
                 </div>
               </div>
-
-              {/* Ingest all button (only when not auto-ingesting) */}
-              {!autoIngest && eligibleCount > 0 && (
-                <button
-                  onClick={handleIngestAll}
-                  className="w-full rounded-xl bg-emerald-600 dark:bg-emerald-500 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition"
-                >
-                  Ingest all {eligibleCount} new {eligibleCount === 1 ? 'file' : 'files'}
-                </button>
-              )}
 
               {/* Per-payer result cards */}
               {response.results.map((r, i) => (
@@ -355,19 +381,44 @@ export default function FetchPage() {
                   key={i}
                   result={r}
                   index={i}
-                  autoIngest={autoIngest}
-                  isIngesting={ingesting.has(i)}
+                  isSelected={selectedIndices.has(i)}
                   isIngested={ingested.has(i)}
-                  onIngest={() => handleIngest(r, i)}
+                  onToggleSelect={() => toggleSelect(i)}
                 />
               ))}
+
+              {/* Selection action bar */}
+              {!autoIngest && selectableCount > 0 && (
+                <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#181A20] p-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                    <button onClick={selectAll} className="hover:text-[#91BFEB] transition">All</button>
+                    <span>·</span>
+                    <button onClick={selectNone} className="hover:text-[#91BFEB] transition">None</button>
+                    <span className="text-slate-300 dark:text-white/20">|</span>
+                    <span>{pendingSelected} selected</span>
+                  </div>
+                  <button
+                    onClick={handleIngestSelected}
+                    disabled={pendingSelected === 0 || ingesting}
+                    className="rounded-lg bg-[#15173F] dark:bg-[#91BFEB] px-4 py-1.5 text-xs font-semibold text-white dark:text-[#15173F]
+                               hover:opacity-90 disabled:opacity-40 transition"
+                  >
+                    {ingesting ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className="h-3 w-3 rounded-full border-2 border-white/30 dark:border-[#15173F]/30 border-t-white dark:border-t-[#15173F] animate-spin" />
+                        Sending…
+                      </span>
+                    ) : (
+                      `Send ${pendingSelected} to AI pipeline`
+                    )}
+                  </button>
+                </div>
+              )}
 
               {/* Pipeline links */}
               {(response.policy_ids.length > 0 || ingested.size > 0) && (
                 <div className="rounded-2xl border border-[#91BFEB]/40 bg-[#dceeff]/40 dark:bg-[#91BFEB]/10 p-4 text-sm">
-                  <p className="font-semibold text-[#15173F] dark:text-white mb-2">
-                    Ingestion pipeline started
-                  </p>
+                  <p className="font-semibold text-[#15173F] dark:text-white mb-1">Ingestion pipeline started</p>
                   <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
                     {response.policy_ids.length + ingested.size}{' '}
                     {(response.policy_ids.length + ingested.size) === 1 ? 'policy is' : 'policies are'} now
@@ -390,57 +441,56 @@ export default function FetchPage() {
   );
 }
 
-function ResultCard({ result, index, autoIngest, isIngesting, isIngested, onIngest }: {
+function ResultCard({ result, index, isSelected, isIngested, onToggleSelect }: {
   result: ResultEntry;
   index: number;
-  autoIngest: boolean;
-  isIngesting: boolean;
+  isSelected: boolean;
   isIngested: boolean;
-  onIngest: () => void;
+  onToggleSelect: () => void;
 }) {
   const isError = result.content_type === 'error';
   const isDedup = !result.is_new && !isError;
-  const canIngest = result.is_new && !isError && result.local_path && !autoIngest && !isIngested;
+  const selectable = isSelectable(result) && !isIngested;
 
   return (
     <div
-      className={`rounded-2xl border p-4 ${
-        isError
+      onClick={selectable ? onToggleSelect : undefined}
+      className={`rounded-2xl border p-4 transition ${
+        isIngested
+          ? 'border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10'
+          : isError
           ? 'border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10'
           : isDedup
           ? 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5'
-          : isIngested
-          ? 'border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10'
-          : 'border-green-200 dark:border-green-500/30 bg-green-50 dark:bg-green-500/10'
+          : isSelected
+          ? 'border-[#91BFEB] bg-[#dceeff]/60 dark:bg-[#91BFEB]/10 cursor-pointer'
+          : 'border-green-200 dark:border-green-500/30 bg-green-50 dark:bg-green-500/10 cursor-pointer'
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-slate-800 dark:text-white">{result.payer}</p>
-          {result.filename && (
-            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 truncate">{result.filename}</p>
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+          {/* Checkbox — only for selectable, non-ingested results */}
+          {selectable && (
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={onToggleSelect}
+              onClick={(e) => e.stopPropagation()}
+              className="h-4 w-4 shrink-0 rounded border-slate-300 accent-[#91BFEB]"
+            />
           )}
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-800 dark:text-white">{result.payer}</p>
+            {result.filename && (
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 truncate">{result.filename}</p>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {canIngest && (
-            <button
-              onClick={onIngest}
-              disabled={isIngesting}
-              className="shrink-0 rounded-lg bg-[#15173F] dark:bg-[#91BFEB] px-3 py-1 text-xs font-semibold text-white dark:text-[#15173F] hover:opacity-90 disabled:opacity-50 transition"
-            >
-              {isIngesting ? (
-                <span className="flex items-center gap-1.5">
-                  <span className="h-3 w-3 rounded-full border-2 border-white/30 dark:border-[#15173F]/30 border-t-white dark:border-t-[#15173F] animate-spin" />
-                  Ingesting…
-                </span>
-              ) : (
-                'Ingest'
-              )}
-            </button>
-          )}
+
+        <div className="flex items-center gap-2 shrink-0">
           {isIngested && (
-            <span className="shrink-0 rounded-full bg-emerald-100 dark:bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-              Pipeline started
+            <span className="rounded-full bg-emerald-100 dark:bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+              Indexed
             </span>
           )}
           <StatusBadge result={result} />
@@ -448,22 +498,15 @@ function ResultCard({ result, index, autoIngest, isIngesting, isIngested, onInge
       </div>
 
       {/* Metadata row */}
-      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+      <div className={`mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400 ${selectable ? 'ml-6' : ''}`}>
         {result.content_type !== 'error' && (
-          <span>
-            Type:{' '}
-            <span className="font-medium text-slate-700 dark:text-slate-300 uppercase">{result.content_type}</span>
-          </span>
+          <span>Type: <span className="font-medium text-slate-700 dark:text-slate-300 uppercase">{result.content_type}</span></span>
         )}
         {result.effective_date && (
-          <span>
-            Effective: <span className="font-medium text-slate-700 dark:text-slate-300">{result.effective_date}</span>
-          </span>
+          <span>Effective: <span className="font-medium text-slate-700 dark:text-slate-300">{result.effective_date}</span></span>
         )}
         {result.file_hash && (
-          <span>
-            Hash: <span className="font-mono text-slate-600 dark:text-slate-400">{result.file_hash.slice(0, 10)}…</span>
-          </span>
+          <span>Hash: <span className="font-mono text-slate-600 dark:text-slate-400">{result.file_hash.slice(0, 10)}…</span></span>
         )}
       </div>
 
@@ -480,20 +523,18 @@ function ResultCard({ result, index, autoIngest, isIngesting, isIngested, onInge
           href={result.source_url}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-2 block truncate text-xs text-[#91BFEB] hover:underline"
+          onClick={(e) => e.stopPropagation()}
+          className={`mt-2 block truncate text-xs text-[#91BFEB] hover:underline ${selectable ? 'ml-6' : ''}`}
         >
           {result.source_url}
         </a>
       )}
 
-      {/* Policy ID for ingestion tracking */}
+      {/* Policy ID */}
       {result.policy_id && (
-        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+        <p className={`mt-2 text-xs text-slate-500 dark:text-slate-400 ${selectable ? 'ml-6' : ''}`}>
           Pipeline ID:{' '}
-          <Link
-            href="/policies"
-            className="font-mono text-[#91BFEB] hover:underline"
-          >
+          <Link href="/policies" className="font-mono text-[#91BFEB] hover:underline" onClick={(e) => e.stopPropagation()}>
             {result.policy_id.slice(0, 8)}…
           </Link>
         </p>
@@ -505,20 +546,20 @@ function ResultCard({ result, index, autoIngest, isIngesting, isIngested, onInge
 function StatusBadge({ result }: { result: ResultEntry }) {
   if (result.content_type === 'error') {
     return (
-      <span className="shrink-0 rounded-full bg-red-100 dark:bg-red-500/20 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
-        Error
+      <span className="rounded-full bg-red-100 dark:bg-red-500/20 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
+        Failed
       </span>
     );
   }
   if (!result.is_new) {
     return (
-      <span className="shrink-0 rounded-full bg-slate-200 dark:bg-white/10 px-2 py-0.5 text-xs font-medium text-slate-600 dark:text-slate-400">
+      <span className="rounded-full bg-slate-200 dark:bg-white/10 px-2 py-0.5 text-xs font-medium text-slate-600 dark:text-slate-400">
         Unchanged
       </span>
     );
   }
   return (
-    <span className="shrink-0 rounded-full bg-green-100 dark:bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
+    <span className="rounded-full bg-green-100 dark:bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
       New
     </span>
   );

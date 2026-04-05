@@ -32,7 +32,10 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
 from app.core.logging import get_logger
-from app.retrievers.base import BasePolicyRetriever, FetchResult, build_client, compute_hash
+from app.retrievers.base import (
+    BasePolicyRetriever, FetchResult, SearchResult,
+    build_client, compute_hash, google_cse_search, DRUG_ALIASES,
+)
 
 log = get_logger(__name__)
 
@@ -54,6 +57,28 @@ class CignaRetriever(BasePolicyRetriever):
         store_dir.mkdir(parents=True, exist_ok=True)
 
         async with build_client() as client:
+            # ── Phase 0: Google Custom Search ────────────────────────────────
+            raw = drug_name.lower().strip()
+            alias = DRUG_ALIASES.get(raw.split()[0], "")
+            names = [drug_name] + ([alias] if alias else [])
+            # Cigna calls these "coverage position criteria", not "drug policy"
+            cse_queries = [
+                f'cigna "{n}" "coverage position criteria" filetype:pdf'
+                for n in names
+            ]
+            for q in cse_queries:
+                for result in await google_cse_search(client, q):
+                    url = result.url
+                    if "cigna.com" not in url.lower() or not url.lower().endswith(".pdf"):
+                        continue
+                    try:
+                        pdf_resp = await client.get(url)
+                        if pdf_resp.status_code == 200 and pdf_resp.content[:4] == b"%PDF":
+                            log.info("Cigna: PDF found via Google CSE", url=url)
+                            return [self._save_pdf(drug_name, url, pdf_resp.content, store_dir)]
+                    except Exception as exc:
+                        log.warning("Cigna: CSE PDF download failed", url=url, error=str(exc))
+
             # ── Step 1: Scrape both A-Z index pages for PDF links ────────────
             all_candidates: list[tuple[int, str, str]] = []  # (score, url, link_text)
 
@@ -114,12 +139,14 @@ class CignaRetriever(BasePolicyRetriever):
         soup = BeautifulSoup(html, "lxml")
         drug_lower = drug_name.lower().strip()
 
-        # Build multiple search variants
-        name_variants = {drug_lower}
-        name_variants.add(drug_lower.split()[0])  # brand name only
-        # Common generic/brand swaps
+        # Build multiple search variants — include brand AND generic name
+        name_variants = {drug_lower, drug_lower.split()[0]}
         name_variants.add(drug_lower.replace(" ", "_"))
         name_variants.add(drug_lower.replace(" ", "-"))
+        alias = DRUG_ALIASES.get(drug_lower.split()[0], "")
+        if alias:
+            name_variants.add(alias)
+            name_variants.add(alias.replace(" ", "-"))
 
         candidates: list[tuple[int, str, str]] = []
 

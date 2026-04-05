@@ -20,6 +20,50 @@ from typing import Optional
 
 import httpx
 
+from app.core.config import get_settings
+from app.core.logging import get_logger
+
+log = get_logger(__name__)
+
+GOOGLE_CSE_URL = "https://www.googleapis.com/customsearch/v1"
+
+# Common brand ↔ generic name pairs for drug policy searches.
+# Payers use INN (generic) names in PDF titles; queries need both.
+DRUG_ALIASES: dict[str, str] = {
+    "humira": "adalimumab",
+    "adalimumab": "humira",
+    "rituxan": "rituximab",
+    "rituximab": "rituxan",
+    "keytruda": "pembrolizumab",
+    "pembrolizumab": "keytruda",
+    "opdivo": "nivolumab",
+    "nivolumab": "opdivo",
+    "dupixent": "dupilumab",
+    "dupilumab": "dupixent",
+    "stelara": "ustekinumab",
+    "ustekinumab": "stelara",
+    "entyvio": "vedolizumab",
+    "vedolizumab": "entyvio",
+    "cosentyx": "secukinumab",
+    "secukinumab": "cosentyx",
+    "skyrizi": "risankizumab",
+    "risankizumab": "skyrizi",
+    "tremfya": "guselkumab",
+    "guselkumab": "tremfya",
+    "enbrel": "etanercept",
+    "etanercept": "enbrel",
+    "remicade": "infliximab",
+    "infliximab": "remicade",
+    "orencia": "abatacept",
+    "abatacept": "orencia",
+    "xeljanz": "tofacitinib",
+    "tofacitinib": "xeljanz",
+    "rinvoq": "upadacitinib",
+    "upadacitinib": "rinvoq",
+    "olumiant": "baricitinib",
+    "baricitinib": "olumiant",
+}
+
 
 # Browser-like headers reduce bot-detection false positives on payer sites
 DEFAULT_HEADERS = {
@@ -59,6 +103,83 @@ class FetchResult:
 def compute_hash(data: bytes) -> str:
     """SHA-256 hex digest of raw bytes."""
     return hashlib.sha256(data).hexdigest()
+
+
+@dataclass
+class SearchResult:
+    """One result item returned by google_cse_search."""
+    title: str
+    url: str
+    snippet: str
+
+
+async def google_cse_search(
+    client: httpx.AsyncClient,
+    query: str,
+    num: int = 10,
+) -> list[SearchResult]:
+    """
+    Search via Google Programmable Search Engine (Custom Search JSON API).
+
+    Reads GOOGLE_CSE_KEY and GOOGLE_CSE_ID from settings/.env.
+    Returns an empty list (not an exception) on any failure so callers can
+    fall through to their existing scraping fallback.
+
+    API docs: https://developers.google.com/custom-search/v1/reference/rest/v1/cse/list
+    Free quota: 100 queries/day; $5 per 1000 after that.
+    """
+    settings = get_settings()
+
+    if not settings.google_cse_key or not settings.google_cse_id:
+        log.warning(
+            "Google CSE not configured — set GOOGLE_CSE_KEY and GOOGLE_CSE_ID in .env"
+        )
+        return []
+
+    try:
+        resp = await client.get(
+            GOOGLE_CSE_URL,
+            params={
+                "key": settings.google_cse_key,
+                "cx": settings.google_cse_id,
+                "q": query,
+                "num": min(num, 10),  # API maximum is 10 per request
+            },
+        )
+        log.info("Google CSE search", query=query, status=resp.status_code)
+
+        if resp.status_code != 200:
+            log.warning(
+                "Google CSE non-200 response",
+                status=resp.status_code,
+                body=resp.text[:300],
+            )
+            return []
+
+        data = resp.json()
+        items = data.get("items", [])
+
+        if not items:
+            log.info("Google CSE: no results", query=query,
+                     search_info=data.get("searchInformation", {}))
+            return []
+
+        results = [
+            SearchResult(
+                title=item.get("title", ""),
+                url=item.get("link", ""),
+                snippet=item.get("snippet", ""),
+            )
+            for item in items
+            if item.get("link")
+        ]
+        log.info("Google CSE: results found", query=query, count=len(results),
+                 urls=[r.url for r in results])
+        return results
+
+    except Exception as exc:
+        log.warning("Google CSE search failed", query=query, error=str(exc))
+        return []
 
 
 def build_client() -> httpx.AsyncClient:
