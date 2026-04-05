@@ -94,11 +94,13 @@ async def run_ingestion_pipeline(policy_id: uuid.UUID, file_path: Path, provider
         await _set_status(policy_id, "nlp_extracting")
         nlp_result = await asyncio.to_thread(run_nlp_extraction, parsed.full_text)
 
-        # ── Stage 3: Gemini structured extraction (NLP-grounded) ──────────────
+        # ── Stage 3: LLM structured extraction (NLP-grounded) ────────────────
         await _set_status(policy_id, "gemini_extracting")
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Policy).where(Policy.id == policy_id))
             policy_for_extraction = result.scalar_one()
+            policy_for_extraction.llm_provider = provider or "ollama"
+            await db.commit()
 
         extracted = await extract_policy_structure(
             parsed.full_text,

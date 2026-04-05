@@ -57,7 +57,7 @@ STAGE_LABELS = {
 
 FAILED_STAGE_HINTS = {
     "parse": ("docling", "marker", "pypdf", "parse", "ocr", "pdf"),
-    "extract": ("json", "structured extraction", "ollama", "gemini", "groq", "section"),
+    "extract": ("json", "structured extraction", "ollama", "gemini", "groq", "nvidia", "section"),
     "postgres": ("postgres", "sql", "database", "duplicate key", "constraint"),
     "chunk": ("chunk",),
     "embed": ("embed", "embedding"),
@@ -132,7 +132,7 @@ async def upload_policy(
     db.add(policy)
     await db.commit()
 
-    selected_provider = provider if provider in ("gemini", "ollama", "groq") else settings.llm_provider
+    selected_provider = provider if provider in ("gemini", "ollama", "groq", "nvidia") else settings.llm_provider
 
     # Launch pipeline in background — returns immediately to caller
     background_tasks.add_task(run_ingestion_pipeline, policy_id, dest_path, selected_provider)
@@ -210,7 +210,9 @@ async def list_policies(db: AsyncSession = Depends(get_db)):
             effective_date=policy.effective_date,
             status=policy.status,
             drug_count=drug_count,
+            llm_provider=policy.llm_provider,
             created_at=policy.created_at,
+            updated_at=policy.updated_at,
         )
         for policy, drug_count in rows
     ]
