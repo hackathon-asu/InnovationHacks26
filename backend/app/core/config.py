@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-5-20250514"
 
-    database_url: str = "postgresql+asyncpg://postgres:password@localhost:5432/antonrx"
+    database_url: str = "postgresql+asyncpg://neondb_owner:password@localhost:5432/neondb"
 
     upload_dir: Path = Path("uploads")
     max_upload_size_mb: int = 50

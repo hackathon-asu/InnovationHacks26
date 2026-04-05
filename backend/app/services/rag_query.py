@@ -169,30 +169,33 @@ async def _vector_search(
     similarity = 1 - distance (higher = more relevant).
     """
     query_embedding = await embed_query(question)
-    embedding_literal = str(query_embedding)
+    vec_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
 
-    # Build the pgvector cosine similarity query
-    # We use the <=> operator (cosine distance) and convert to similarity
-    base_query = (
-        select(
-            DocumentChunk,
-            (1 - DocumentChunk.embedding.op("<=>")(query_embedding)).label("similarity"),
-        )
-        .join(Policy, DocumentChunk.policy_id == Policy.id)
-        .where(Policy.status == "indexed")
-    )
-
+    # Use raw SQL to avoid pgvector/SQLAlchemy bind parameter issues
+    payer_clause = ""
+    params: dict = {"limit": top_k * 2}
     if payer_filter:
-        base_query = base_query.where(
-            func.lower(Policy.payer_name).contains(payer_filter.lower())
-        )
+        payer_clause = "AND LOWER(p.payer_name) LIKE :payer_pattern"
+        params["payer_pattern"] = f"%{payer_filter.lower()}%"
 
-    base_query = base_query.order_by(
-        DocumentChunk.embedding.op("<=>")(query_embedding)
-    ).limit(top_k * 2)   # fetch 2x, then rerank to top_k
+    raw_sql = text(f"""
+        SELECT dc.*, 1 - (dc.embedding <=> '{vec_str}'::vector) AS similarity
+        FROM document_chunks dc
+        JOIN policies p ON dc.policy_id = p.id
+        WHERE p.status = 'indexed' {payer_clause}
+        ORDER BY dc.embedding <=> '{vec_str}'::vector
+        LIMIT :limit
+    """)
 
-    result = await db.execute(base_query)
-    rows = result.all()
+    result = await db.execute(raw_sql, params)
+    raw_rows = result.mappings().all()
+
+    # Convert raw rows to (DocumentChunk-like, similarity) pairs
+    rows = []
+    for row in raw_rows:
+        chunk = await db.get(DocumentChunk, row["id"])
+        if chunk:
+            rows.append((chunk, float(row["similarity"])))
 
     # Simple reranking: boost chunks from "criteria" sections (more precise)
     reranked = sorted(
@@ -203,7 +206,7 @@ async def _vector_search(
         reverse=True
     )
 
-    return [(chunk, float(score)) for chunk, score in reranked[:top_k]]
+    return reranked[:top_k]
 
 
 def _format_structured_context(records: list[dict]) -> str:
