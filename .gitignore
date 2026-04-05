@@ -34,3 +34,4 @@ docs/screenshots/
 # OS
 .DS_Store
 Thumbs.db
+/backend/scripts
