@@ -893,6 +893,10 @@ async def extract_policy_structure(
         if not data:
             raise RuntimeError("Structured extraction returned no valid JSON sections")
 
+    # Sanitize: payer_name must be a string (LLMs sometimes return null)
+    if data.get("payer_name") is None:
+        data["payer_name"] = ""
+
     extracted = PolicyExtracted(**data)
     if not extracted.payer_name and not extracted.drug_coverages:
         if selected_provider in {"ollama", "groq"}:

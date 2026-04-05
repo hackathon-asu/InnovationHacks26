@@ -4,11 +4,16 @@ export async function POST(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const provider = searchParams.get('provider');
-    const formData = await request.formData();
     const qs = provider ? `?provider=${provider}` : '';
+
+    // Forward the raw request body + content-type header to preserve multipart boundary
+    const contentType = request.headers.get('content-type') || '';
+    const body = await request.arrayBuffer();
+
     const res = await fetch(`${FASTAPI}/api/v1/ingest/upload${qs}`, {
       method: 'POST',
-      body: formData,
+      headers: { 'Content-Type': contentType },
+      body,
     });
     const text = await res.text();
     let data: unknown;
