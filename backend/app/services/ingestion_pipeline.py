@@ -1,3 +1,9 @@
+# --------0x0x0x0x0x0-----------
+# AntonRX - AI Policy Tracker
+# Written by Abhinav & Neeharika
+# CC BY-NC-SA 4.0
+# Commercial use: chatgpt@asu.edu
+# --------------------------------
 """
 Main orchestrator — 8-stage pipeline incorporating research guide improvements.
 
@@ -141,6 +147,7 @@ async def run_ingestion_pipeline(
             filename=policy_for_extraction.filename,
             fetch_hints=fetch_hints,
             policy_id=str(policy_id),
+            parsed_sections=parsed.sections,
         )
 
         # ── Stage 4: RxNorm normalization ─────────────────────────────────────

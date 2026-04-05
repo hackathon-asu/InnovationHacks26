@@ -1,3 +1,9 @@
+# --------0x0x0x0x0x0-----------
+# AntonRX - AI Policy Tracker
+# Written by Abhinav & Neeharika
+# CC BY-NC-SA 4.0
+# Commercial use: chatgpt@asu.edu
+# --------------------------------
 """
 Stage 2b: Structured extraction with Gemini — NLP-grounded.
 
@@ -49,9 +55,21 @@ You are a precise medical benefit drug policy parser for a health insurance anal
 You will receive:
   1. The full text of a medical policy document
   2. NLP pre-extraction hints (drug names, ICD-10 codes, HCPCS J-codes already found by NER)
+  3. Section metadata indicating which parts of the document are coverage policy vs background/guidelines/references
 
 Your task: Return ONLY valid JSON matching the schema below.
 No markdown, no explanation, no preamble. Start your response with '{'.
+
+CRITICAL SCOPE RULES:
+- ONLY extract drugs that THIS POLICY provides coverage determinations for.
+- Do NOT extract drugs that are merely mentioned as:
+  * Alternatives or comparators in clinical guidelines sections
+  * Examples of drug classes (e.g. "examples of DMARDs include...")
+  * Step therapy prerequisites (extract those as step_therapy entries on the covered drug, not as separate drug_coverages)
+  * Background/reference/appendix context
+- The policy TITLE tells you what drugs are actually covered. Use it as your anchor.
+- If the title says "Rituximab Products" then only rituximab products are covered drugs.
+- Drugs mentioned in "Appendix", "Guidelines", "References", or "Background" sections are context, not covered drugs.
 
 JSON SCHEMA:
 {
@@ -118,13 +136,15 @@ JSON SCHEMA:
 }
 
 RULES:
-- Extract ALL drugs mentioned anywhere in the document.
+- Extract ONLY drugs that this policy provides coverage determinations for — NOT every drug mentioned.
 - Use the NLP hints as a starting point — confirm or expand, never ignore hinted codes.
 - For clinical_criteria: capture every individual requirement as its own object.
 - For step_therapy: number steps in order. Step 1 = first drug patient must try.
+  Step therapy prerequisites are NOT separate drug_coverages — they belong inside the covered drug's step_therapy array.
 - Prefer exact policy language in description fields — do not paraphrase criteria.
 - If a field is genuinely absent, use null (never empty string).
 - site_of_care: use null for the whole object if no site restrictions mentioned.
+- Drugs in "Guidelines", "Background", "Appendix", or "References" sections are CONTEXT ONLY — do not extract them as drug_coverages.
 """.strip()
 
 
@@ -172,7 +192,7 @@ def _build_fetch_hint_block(hints: dict) -> str:
     return "\n".join(lines)
 
 
-def _build_hint_block(nlp: MedNLPResult) -> str:
+def _build_hint_block(nlp: MedNLPResult, sections: dict[str, str] | None = None) -> str:
     """Format NLP pre-extraction results as a structured hint string for Gemini."""
     lines = ["=== NLP PRE-EXTRACTION HINTS (use these as grounding) ==="]
 
@@ -190,7 +210,73 @@ def _build_hint_block(nlp: MedNLPResult) -> str:
             lines.append(f"Med7 medication entities: {', '.join(dict.fromkeys(med7_drugs))[:20]}")
 
     lines.append("=== END HINTS ===")
+
+    # Section awareness: tell the LLM which sections are coverage vs context
+    if sections:
+        lines.append("")
+        lines.append("=== DOCUMENT SECTION MAP (use to determine scope) ===")
+        coverage_sections = {"policy_statement", "clinical_criteria", "applicable_codes",
+                             "step_therapy", "prior_auth", "quantity_limits"}
+        context_sections = {"background", "revision_history", "documentation"}
+        for section_name, section_text in sections.items():
+            char_count = len(section_text)
+            if section_name in coverage_sections:
+                lines.append(f"  [{section_name}] COVERAGE SECTION — {char_count} chars — extract drugs from here")
+            elif section_name in context_sections:
+                lines.append(f"  [{section_name}] CONTEXT ONLY — {char_count} chars — do NOT extract drugs from here")
+            else:
+                lines.append(f"  [{section_name}] {char_count} chars")
+        lines.append("=== END SECTION MAP ===")
+
     return "\n".join(lines)
+
+
+def _validate_extraction_against_nlp(
+    extracted: "PolicyExtracted",
+    nlp_result: MedNLPResult,
+    filename: str | None = None,
+) -> "PolicyExtracted":
+    """
+    Post-extraction validation: score each drug's confidence based on NLP evidence.
+    Drugs with J-codes found by NLP regex get high confidence.
+    Drugs only found by the LLM with no NLP corroboration get flagged.
+    """
+    nlp_j_codes = set(nlp_result.hcpcs_codes)
+    nlp_drug_names_lower = {n.lower() for n in nlp_result.drug_names}
+    title_lower = (filename or "").lower()
+
+    high_confidence = []
+    low_confidence = []
+
+    for drug in extracted.drug_coverages:
+        has_jcode_match = drug.j_code and drug.j_code in nlp_j_codes
+        has_name_match = drug.drug_brand_name.lower() in nlp_drug_names_lower
+        in_title = drug.drug_brand_name.lower() in title_lower
+
+        if has_jcode_match or in_title:
+            high_confidence.append(drug)
+        elif has_name_match:
+            high_confidence.append(drug)
+        else:
+            low_confidence.append(drug)
+
+    if low_confidence:
+        log.info("NLP validation: flagged low-confidence drugs",
+                 high=len(high_confidence),
+                 low=len(low_confidence),
+                 low_drugs=[d.drug_brand_name for d in low_confidence[:10]])
+
+        # If more than 60% of drugs are low-confidence, the LLM likely hallucinated
+        # by extracting drugs from guidelines/appendix sections
+        total = len(high_confidence) + len(low_confidence)
+        if total > 5 and len(low_confidence) / total > 0.6:
+            log.warning("NLP validation: majority of drugs are low-confidence, filtering",
+                        keeping=len(high_confidence), dropping=len(low_confidence))
+            extracted.drug_coverages = high_confidence
+    else:
+        log.info("NLP validation: all drugs confirmed", count=len(high_confidence))
+
+    return extracted
 
 
 def _strip_json_fences(text: str) -> str:
@@ -736,7 +822,8 @@ async def _extract_section_anthropic(section_text: str, hint_block: str) -> dict
 def _merge_section_results(sections: list[dict]) -> dict:
     """
     Merge results from multiple section extractions into a single policy object.
-    Drug coverages are deduplicated by brand name.
+    Drug coverages are deduplicated by (brand_name, j_code) to allow same drug
+    with different J-codes as separate entries, but prevent true duplicates.
     """
     if not sections:
         return {}
@@ -744,7 +831,10 @@ def _merge_section_results(sections: list[dict]) -> dict:
         return sections[0]
 
     base = sections[0].copy()
-    seen_drugs: set[str] = {(d.get("drug_brand_name") or "").lower() for d in base.get("drug_coverages", [])}
+    seen_drugs: set[str] = set()
+    for d in base.get("drug_coverages", []):
+        key = _drug_dedup_key(d)
+        seen_drugs.add(key)
 
     for section in sections[1:]:
         # Merge payer metadata from whichever section has it
@@ -752,14 +842,22 @@ def _merge_section_results(sections: list[dict]) -> dict:
             if not base.get(field) and section.get(field):
                 base[field] = section[field]
 
-        # Merge drug coverages (deduplicate by name)
+        # Merge drug coverages (deduplicate by name+j_code)
         for drug in section.get("drug_coverages", []):
-            name_key = (drug.get("drug_brand_name") or "").lower()
-            if name_key and name_key not in seen_drugs:
+            key = _drug_dedup_key(drug)
+            if key not in seen_drugs:
                 base.setdefault("drug_coverages", []).append(drug)
-                seen_drugs.add(name_key)
+                seen_drugs.add(key)
 
     return base
+
+
+def _drug_dedup_key(drug: dict) -> str:
+    """Generate a dedup key from drug name + J-code + indication."""
+    name = (drug.get("drug_brand_name") or "").lower().strip()
+    j_code = (drug.get("j_code") or "").strip()
+    indication = (drug.get("indication") or "")[:50].lower().strip()
+    return f"{name}|{j_code}|{indication}"
 
 
 def _merge_minimal_results(sections: list[dict]) -> dict:
@@ -876,6 +974,7 @@ async def extract_policy_structure(
     filename: str | None = None,
     fetch_hints: dict | None = None,
     policy_id: str | None = None,
+    parsed_sections: dict[str, str] | None = None,
 ) -> PolicyExtracted:
     """
     Main entry point. Takes raw policy text + NLP hints → returns validated PolicyExtracted.
@@ -885,8 +984,11 @@ async def extract_policy_structure(
     fetch_hints: optional metadata from the retriever (payer_name, drug_name,
     effective_date, source_url). Prepended to the hint block so the LLM confirms
     rather than re-infers already-known facts.
+
+    parsed_sections: optional dict of section_name → text from the parser.
+    Used to tell the LLM which sections are coverage vs context.
     """
-    nlp_hint_block = _build_hint_block(nlp_result)
+    nlp_hint_block = _build_hint_block(nlp_result, sections=parsed_sections)
     hint_block = (
         _build_fetch_hint_block(fetch_hints) + "\n\n" + nlp_hint_block
         if fetch_hints else nlp_hint_block
@@ -952,8 +1054,14 @@ async def extract_policy_structure(
                 extracted = PolicyExtracted(**fallback_data)
         if not extracted.payer_name and not extracted.drug_coverages:
             raise RuntimeError("Structured extraction returned no payer name or drug coverages")
+    # Post-extraction NLP validation: filter hallucinated drugs
+    pre_validation_count = len(extracted.drug_coverages)
+    extracted = _validate_extraction_against_nlp(extracted, nlp_result, filename)
+    post_validation_count = len(extracted.drug_coverages)
+
     log.info("Extraction complete",
              provider=selected_provider,
              payer=extracted.payer_name,
-             drugs=len(extracted.drug_coverages))
+             drugs=post_validation_count,
+             filtered=pre_validation_count - post_validation_count)
     return extracted

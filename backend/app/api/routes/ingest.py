@@ -1,3 +1,9 @@
+# --------0x0x0x0x0x0-----------
+# AntonRX - AI Policy Tracker
+# Written by Abhinav & Neeharika
+# CC BY-NC-SA 4.0
+# Commercial use: chatgpt@asu.edu
+# --------------------------------
 """
 POST /api/v1/ingest/upload     — accept PDF, kick off background pipeline
 GET  /api/v1/ingest/status/{id} — poll pipeline status

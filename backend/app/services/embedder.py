@@ -1,3 +1,9 @@
+# --------0x0x0x0x0x0-----------
+# AntonRX - AI Policy Tracker
+# Written by Abhinav & Neeharika
+# CC BY-NC-SA 4.0
+# Commercial use: chatgpt@asu.edu
+# --------------------------------
 """
 Embedding service — supports Gemini, Ollama, NVIDIA, and Groq (via Ollama fallback).
 All produce 768-dim vectors to match the pgvector HNSW index.
@@ -47,9 +53,11 @@ def _embed_batch_gemini(texts: list[str], task_type: str) -> list[list[float]]:
 def _embed_batch_ollama(texts: list[str]) -> list[list[float]]:
     results = []
     for t in texts:
+        # Truncate to 8000 chars (~2000 tokens) to stay within nomic-embed-text context
+        truncated = t[:8000] if len(t) > 8000 else t
         response = httpx.post(
             f"{settings.ollama_base_url}/api/embeddings",
-            json={"model": settings.ollama_embed_model, "prompt": t},
+            json={"model": settings.ollama_embed_model, "prompt": truncated},
             timeout=30.0,
         )
         response.raise_for_status()
@@ -90,11 +98,13 @@ def _embed_batch_nvidia(texts: list[str], input_type: str = "passage") -> list[l
 
 
 async def embed_chunks(chunks: "list[Chunk]", provider: str | None = None) -> list[list[float]]:
-    """Embed document chunks in batches of 50."""
+    """Embed document chunks in batches of 50. Skips failed chunks with zero vectors."""
     texts = [c.text for c in chunks]
     embeddings: list[list[float]] = []
     loop = asyncio.get_event_loop()
     selected_provider = provider or settings.llm_provider
+    failed_count = 0
+    zero_vector = [0.0] * settings.embedding_dimensions
 
     for i in range(0, len(texts), BATCH_SIZE):
         batch = texts[i: i + BATCH_SIZE]
@@ -105,9 +115,26 @@ async def embed_chunks(chunks: "list[Chunk]", provider: str | None = None) -> li
                 batch_embeddings = await loop.run_in_executor(None, _embed_batch_ollama, batch)
         except Exception as e:
             log.warning("NVIDIA embedding failed, falling back to Ollama", error=str(e))
-            batch_embeddings = await loop.run_in_executor(None, _embed_batch_ollama, batch)
+            try:
+                batch_embeddings = await loop.run_in_executor(None, _embed_batch_ollama, batch)
+            except Exception as e2:
+                # Graceful degradation: embed each chunk individually, skip failures
+                log.warning("Batch embed failed, trying individual chunks", error=str(e2), batch_start=i)
+                batch_embeddings = []
+                for j, text in enumerate(batch):
+                    try:
+                        single = await loop.run_in_executor(None, _embed_batch_ollama, [text])
+                        batch_embeddings.append(single[0])
+                    except Exception as e3:
+                        log.warning("Chunk embed failed, using zero vector",
+                                    chunk_index=i + j, chars=len(text), error=str(e3))
+                        batch_embeddings.append(zero_vector)
+                        failed_count += 1
         embeddings.extend(batch_embeddings)
         log.debug("Embedded batch", start=i, size=len(batch))
+
+    if failed_count:
+        log.warning("Some chunks failed embedding", failed=failed_count, total=len(texts))
 
     return embeddings
 

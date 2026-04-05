@@ -1,3 +1,9 @@
+/* --------0x0x0x0x0x0-----------
+ * AntonRX - AI Policy Tracker
+ * Written by Abhinav & Neeharika
+ * CC BY-NC-SA 4.0
+ * Commercial use: chatgpt@asu.edu
+ * -------------------------------- */
 import { db } from './index';
 import { payers, plans, policies, policyClaims, policyVersions } from './schema';
 import { eq, and, ilike, or, desc, sql } from 'drizzle-orm';

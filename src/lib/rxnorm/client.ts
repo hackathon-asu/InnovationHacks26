@@ -1,3 +1,9 @@
+/* --------0x0x0x0x0x0-----------
+ * AntonRX - AI Policy Tracker
+ * Written by Abhinav & Neeharika
+ * CC BY-NC-SA 4.0
+ * Commercial use: chatgpt@asu.edu
+ * -------------------------------- */
 const RXNORM_BASE = process.env.RXNORM_API_BASE ?? 'https://rxnav.nlm.nih.gov/REST';
 
 export async function getRxCUI(drugName: string): Promise<string | null> {
