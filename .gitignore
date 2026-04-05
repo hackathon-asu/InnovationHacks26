@@ -27,6 +27,9 @@ backend/uploads/
 .env*.local
 backend/.env
 
+# Example policy PDFs
+docs/examples/
+
 # Docs / screenshots
 docs/hackathon/
 docs/screenshots/
