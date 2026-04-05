@@ -147,36 +147,71 @@ export default function FetchPage() {
   const eligibleCount = response?.results.filter((r, i) => r.is_new && !r.error && r.local_path && !ingested.has(i)).length ?? 0;
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-8">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold font-[var(--font-montserrat)] dark:text-white">
-          Fetch Latest Policies
-        </h1>
-        <p className="mt-2 text-slate-500 dark:text-slate-400 text-sm max-w-2xl">
-          Retrieve the newest policy documents from payer websites.
-          Review fetched files, then choose which ones to send through the AI pipeline.
-        </p>
+    <main className="mx-auto max-w-7xl px-6 py-8 space-y-8">
+      {/* ── Hero header ──────────────────────────────────────────────── */}
+      <div className="rounded-3xl border border-slate-200 dark:border-white/[0.06] bg-white dark:bg-[#181A20] p-8 shadow-sm dark:shadow-2xl dark:shadow-black/20">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 className="text-3xl font-bold font-[var(--font-montserrat)] text-slate-900 dark:text-white">
+              Auto-Fetch Policies
+            </h2>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-md">
+              Retrieve the newest policy documents directly from payer websites. Review fetched files, then choose which to send through the AI pipeline.
+            </p>
+          </div>
+
+          <form onSubmit={(e) => { e.preventDefault(); handleFetch(); }} className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
+            <div className="relative flex-1 lg:min-w-[320px]">
+              <svg className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                value={drugName}
+                onChange={(e) => setDrugName(e.target.value)}
+                placeholder="e.g. Rituxan, rituximab, Humira..."
+                className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 pl-11 pr-4 py-3.5 text-sm text-slate-900 dark:text-white outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-[#91BFEB] dark:focus:border-[#91BFEB]/50 focus:ring-1 focus:ring-[#91BFEB]/20 transition-all"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-xl bg-[#15173F] dark:bg-[#91BFEB] px-6 py-3.5 text-sm font-semibold text-white dark:text-[#15173F] hover:opacity-90 active:scale-[0.98] disabled:opacity-50 transition-all shadow-lg shadow-[#15173F]/20 dark:shadow-[#91BFEB]/20"
+            >
+              {loading ? 'Fetching...' : 'Fetch'}
+            </button>
+          </form>
+        </div>
+
+        {/* Quick stats */}
+        <div className="mt-6 flex gap-6 border-t border-slate-100 dark:border-white/5 pt-5">
+          <div>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white font-[var(--font-montserrat)]">{payers.length}</p>
+            <p className="text-xs text-slate-500">Payers</p>
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white font-[var(--font-montserrat)]">{selectedPayers.length}</p>
+            <p className="text-xs text-slate-500">Selected</p>
+          </div>
+          {response && (
+            <>
+              <div>
+                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-[var(--font-montserrat)]">{response.new_files}</p>
+                <p className="text-xs text-slate-500">New files</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-red-500 dark:text-red-400 font-[var(--font-montserrat)]">{response.errors}</p>
+                <p className="text-xs text-slate-500">Errors</p>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         {/* Left — Input form */}
-        <div className="rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#181A20] p-6 shadow-sm space-y-6">
-          {/* Drug name */}
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-              Drug name
-            </label>
-            <input
-              type="text"
-              value={drugName}
-              onChange={(e) => setDrugName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleFetch()}
-              placeholder="e.g. Rituxan, rituximab, Humira…"
-              className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0F1117] px-4 py-2.5 text-sm dark:text-slate-200
-                         placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-[#91BFEB] focus:outline-none focus:ring-2
-                         focus:ring-[#91BFEB]/30 transition"
-            />
-          </div>
+        <div className="rounded-3xl border border-slate-200 dark:border-white/[0.06] bg-white dark:bg-[#181A20] p-6 shadow-sm space-y-6">
+          {/* Drug name (shown smaller since main search is in header) */}
 
           {/* Payer selection */}
           <div>
@@ -248,20 +283,14 @@ export default function FetchPage() {
             <p className="rounded-xl bg-red-50 dark:bg-red-500/10 px-4 py-2.5 text-sm text-red-600 dark:text-red-400">{error}</p>
           )}
 
+          {/* Fetch button (secondary — main one is in hero header) */}
           <button
             onClick={handleFetch}
             disabled={loading}
-            className="w-full rounded-xl bg-[#15173F] dark:bg-[#91BFEB] py-3 text-sm font-semibold text-white dark:text-[#15173F]
-                       hover:opacity-90 disabled:opacity-50 transition"
+            className="w-full rounded-xl border border-[#15173F] dark:border-[#91BFEB] py-2.5 text-sm font-semibold text-[#15173F] dark:text-[#91BFEB]
+                       hover:bg-[#15173F]/5 dark:hover:bg-[#91BFEB]/10 disabled:opacity-50 transition"
           >
-            {loading ? (
-              <span className="flex items-center justify-center gap-2">
-                <span className="h-4 w-4 rounded-full border-2 border-white/30 dark:border-[#15173F]/30 border-t-white dark:border-t-[#15173F] animate-spin" />
-                Fetching policies…
-              </span>
-            ) : (
-              'Fetch latest policies'
-            )}
+            {loading ? 'Fetching...' : 'Fetch policies'}
           </button>
         </div>
 
