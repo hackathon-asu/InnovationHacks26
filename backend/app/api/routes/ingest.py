@@ -18,7 +18,7 @@ from sqlalchemy.orm import selectinload
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.db.session import get_db
-from app.models.policy import Policy, DrugCoverage
+from app.models.policy import Policy, DrugCoverage, AuditLog
 from app.schemas.policy import PolicyListItem, PolicyOut, PolicyUploadResponse, PipelineStatus, PipelineStage
 from app.services.ingestion_pipeline import run_ingestion_pipeline
 
@@ -270,3 +270,36 @@ async def delete_policies_by_status(
         except Exception:
             pass
     return {"deleted": len(file_paths)}
+
+
+@router.get("/changes")
+async def list_changes(db: AsyncSession = Depends(get_db)):
+    """Return audit log entries joined with policy metadata for the changes timeline."""
+    result = await db.execute(
+        select(AuditLog, Policy)
+        .join(Policy, AuditLog.policy_id == Policy.id)
+        .order_by(AuditLog.created_at.desc())
+        .limit(50)
+    )
+    rows = result.all()
+
+    return [
+        {
+            "payerName": policy.payer_name or "Unknown Payer",
+            "planName": policy.policy_type or "",
+            "policyTitle": policy.title or policy.filename,
+            "policyNumber": policy.policy_number or "",
+            "versionNumber": 1,
+            "effectiveDate": policy.effective_date or "",
+            "changeSummary": audit.diff_summary,
+            "diffJson": [
+                {
+                    "field": "status",
+                    "old": "",
+                    "new": audit.event_type,
+                    "significance": audit.significance or "material",
+                }
+            ],
+        }
+        for audit, policy in rows
+    ]

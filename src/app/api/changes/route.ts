@@ -1,4 +1,12 @@
+const FASTAPI = 'http://localhost:8000';
+
 export async function GET() {
-  // Changes endpoint not yet available via FastAPI — return empty
-  return Response.json({ changes: [] });
+  try {
+    const res = await fetch(`${FASTAPI}/api/v1/ingest/changes`);
+    if (!res.ok) return Response.json({ changes: [] });
+    const data = await res.json();
+    return Response.json({ changes: data });
+  } catch {
+    return Response.json({ changes: [] });
+  }
 }
