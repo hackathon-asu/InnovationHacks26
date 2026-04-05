@@ -22,7 +22,7 @@ log = get_logger(__name__)
 
 genai.configure(api_key=settings.gemini_api_key)
 
-GEMINI_EMBED_MODEL = "models/text-embedding-004"
+GEMINI_EMBED_MODEL = "models/text-embedding-005"
 BATCH_SIZE = 50
 
 
@@ -98,14 +98,16 @@ async def embed_chunks(chunks: "list[Chunk]", provider: str | None = None) -> li
 
     for i in range(0, len(texts), BATCH_SIZE):
         batch = texts[i: i + BATCH_SIZE]
-        if selected_provider == "nvidia" and settings.nvidia_api_key:
-            batch_embeddings = await loop.run_in_executor(None, _embed_batch_nvidia, batch, "passage")
-        elif selected_provider in ("ollama", "groq", "anthropic"):
+        try:
+            if settings.nvidia_api_key:
+                batch_embeddings = await loop.run_in_executor(None, _embed_batch_nvidia, batch, "passage")
+            else:
+                batch_embeddings = await loop.run_in_executor(None, _embed_batch_ollama, batch)
+        except Exception as e:
+            log.warning("NVIDIA embedding failed, falling back to Ollama", error=str(e))
             batch_embeddings = await loop.run_in_executor(None, _embed_batch_ollama, batch)
-        else:
-            batch_embeddings = await loop.run_in_executor(None, _embed_batch_gemini, batch, "retrieval_document")
         embeddings.extend(batch_embeddings)
-        log.debug("Embedded batch", provider=selected_provider, start=i, size=len(batch))
+        log.debug("Embedded batch", start=i, size=len(batch))
 
     return embeddings
 
@@ -113,10 +115,12 @@ async def embed_chunks(chunks: "list[Chunk]", provider: str | None = None) -> li
 async def embed_query(question: str) -> list[float]:
     """Embed a single query string for vector search."""
     loop = asyncio.get_event_loop()
-    if settings.llm_provider in ("ollama", "groq"):
+    try:
+        if settings.nvidia_api_key:
+            result = await loop.run_in_executor(None, _embed_batch_nvidia, [question], "query")
+        else:
+            result = await loop.run_in_executor(None, _embed_batch_ollama, [question])
+    except Exception as e:
+        log.warning("NVIDIA query embedding failed, falling back to Ollama", error=str(e))
         result = await loop.run_in_executor(None, _embed_batch_ollama, [question])
-    elif settings.llm_provider == "nvidia" and settings.nvidia_api_key:
-        result = await loop.run_in_executor(None, _embed_batch_nvidia, [question], "query")
-    else:
-        result = await loop.run_in_executor(None, _embed_batch_gemini, [question], "retrieval_query")
     return result[0]

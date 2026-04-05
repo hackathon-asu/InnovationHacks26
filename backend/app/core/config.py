@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     llm_provider: str = "ollama"
 
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash-lite"
+    gemini_model: str = "gemma-4-31b-it"
 
     # Ollama (dev default) — run: ollama pull qwen3:4b && ollama pull nomic-embed-text
     ollama_base_url: str = "http://localhost:11434"

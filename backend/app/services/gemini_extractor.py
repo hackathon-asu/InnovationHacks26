@@ -31,6 +31,9 @@ from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable
 # Limit to 1 concurrent LLM call — Gemini free tier is 5 req/min; Ollama is single-threaded locally
 _llm_semaphore = asyncio.Semaphore(1)
 
+# In-memory progress tracker for extraction (policy_id → {sections_done, sections_total, retries})
+extraction_progress: dict[str, dict] = {}
+
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.schemas.policy import PolicyExtracted
@@ -424,14 +427,15 @@ def _split_into_sections(text: str, max_chars: int = 40_000) -> list[str]:
 
 def _split_into_sections_for_provider(text: str, provider: str | None) -> list[str]:
     if provider == "ollama":
-        return _split_into_sections(text, max_chars=24_000)
+        return _split_into_sections(text, max_chars=10_000)
     if provider == "groq":
         return _split_into_sections(text, max_chars=20_000)
     if provider == "nvidia":
         return _split_into_sections(text, max_chars=30_000)
     if provider == "anthropic":
         return _split_into_sections(text, max_chars=80_000)  # Claude has 200K context
-    return _split_into_sections(text)
+    # Gemini/Gemma — 1M input context, send whole doc as one section to save RPD
+    return _split_into_sections(text, max_chars=200_000)
 
 
 def _is_retryable(exc: BaseException) -> bool:
@@ -439,8 +443,8 @@ def _is_retryable(exc: BaseException) -> bool:
 
 
 @retry(
-    stop=stop_after_attempt(8),
-    wait=wait_exponential(multiplier=2, min=30, max=180),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=2, min=10, max=60),
     retry=retry_if_exception(_is_retryable),
 )
 async def _extract_section(model, section_text: str, hint_block: str) -> dict:
@@ -452,7 +456,7 @@ async def _extract_section(model, section_text: str, hint_block: str) -> dict:
             prompt,
             generation_config=genai.types.GenerationConfig(
                 temperature=0.0,
-                max_output_tokens=8192,
+                max_output_tokens=65536,
             ),
         )
 
@@ -492,7 +496,7 @@ async def _extract_section_ollama(section_text: str, hint_block: str) -> dict:
                         {"role": "user", "content": prompt},
                     ],
                     "stream": False,
-                    "options": {"temperature": 0, "num_predict": 8192, "num_ctx": 32768},
+                    "options": {"temperature": 0, "num_predict": 16384, "num_ctx": 32768},
                 },
             )
             resp.raise_for_status()
@@ -740,7 +744,7 @@ def _merge_section_results(sections: list[dict]) -> dict:
         return sections[0]
 
     base = sections[0].copy()
-    seen_drugs: set[str] = {d["drug_brand_name"].lower() for d in base.get("drug_coverages", [])}
+    seen_drugs: set[str] = {(d.get("drug_brand_name") or "").lower() for d in base.get("drug_coverages", [])}
 
     for section in sections[1:]:
         # Merge payer metadata from whichever section has it
@@ -750,7 +754,7 @@ def _merge_section_results(sections: list[dict]) -> dict:
 
         # Merge drug coverages (deduplicate by name)
         for drug in section.get("drug_coverages", []):
-            name_key = drug.get("drug_brand_name", "").lower()
+            name_key = (drug.get("drug_brand_name") or "").lower()
             if name_key and name_key not in seen_drugs:
                 base.setdefault("drug_coverages", []).append(drug)
                 seen_drugs.add(name_key)
@@ -834,12 +838,44 @@ async def _extract_minimal_structure(
     return _heuristic_policy_fallback(raw_text, nlp_result, filename)
 
 
+async def _run_sections_with_progress(
+    policy_id: str | None,
+    sections: list[str],
+    extract_fn,
+    hint_block: str,
+) -> dict:
+    """Run extraction on each section sequentially, tracking progress."""
+    total = len(sections)
+    if policy_id:
+        extraction_progress[policy_id] = {"sections_done": 0, "sections_total": total, "retries": 0}
+
+    results: list[dict] = []
+    for i, section in enumerate(sections):
+        try:
+            result = await extract_fn(section, hint_block)
+            if isinstance(result, dict):
+                results.append(result)
+        except Exception as e:
+            log.warning("Section extraction failed", section=i + 1, error=str(e))
+            if policy_id:
+                extraction_progress[policy_id]["retries"] = extraction_progress.get(policy_id, {}).get("retries", 0) + 1
+
+        if policy_id:
+            extraction_progress[policy_id]["sections_done"] = i + 1
+
+    if policy_id:
+        extraction_progress.pop(policy_id, None)
+
+    return _merge_section_results(results) if results else {}
+
+
 async def extract_policy_structure(
     raw_text: str,
     nlp_result: MedNLPResult,
     provider: str | None = None,
     filename: str | None = None,
     fetch_hints: dict | None = None,
+    policy_id: str | None = None,
 ) -> PolicyExtracted:
     """
     Main entry point. Takes raw policy text + NLP hints → returns validated PolicyExtracted.
@@ -860,62 +896,27 @@ async def extract_policy_structure(
 
     if selected_provider == "ollama":
         log.info("Sending to Ollama", model=settings.ollama_model, sections=len(sections), total_chars=len(raw_text))
-        if len(sections) == 1:
-            data = await _extract_section_ollama(sections[0], hint_block)
-        else:
-            section_results = await asyncio.gather(
-                *[_extract_section_ollama(s, hint_block) for s in sections],
-                return_exceptions=True
-            )
-            valid = [r for r in section_results if isinstance(r, dict)]
-            data = _merge_section_results(valid)
+        data = await _run_sections_with_progress(policy_id, sections, _extract_section_ollama, hint_block)
     elif selected_provider == "groq":
         log.info("Sending to Groq", model=settings.groq_model, sections=len(sections), total_chars=len(raw_text))
-        section_results = []
-        for s in sections:
-            try:
-                result = await _extract_section_groq(s, hint_block)
-                section_results.append(result)
-            except Exception as e:
-                log.warning("Groq section failed", error=str(e))
-        data = _merge_section_results(section_results)
+        data = await _run_sections_with_progress(policy_id, sections, _extract_section_groq, hint_block)
     elif selected_provider == "nvidia":
         log.info("Sending to NVIDIA", model=settings.nvidia_model, sections=len(sections), total_chars=len(raw_text))
-        if len(sections) == 1:
-            data = await _extract_section_nvidia(sections[0], hint_block)
-        else:
-            section_results = await asyncio.gather(
-                *[_extract_section_nvidia(s, hint_block) for s in sections],
-                return_exceptions=True
-            )
-            valid = [r for r in section_results if isinstance(r, dict)]
-            data = _merge_section_results(valid)
+        data = await _run_sections_with_progress(policy_id, sections, _extract_section_nvidia, hint_block)
     elif selected_provider == "anthropic":
         log.info("Sending to Anthropic", model=settings.anthropic_model, sections=len(sections), total_chars=len(raw_text))
-        if len(sections) == 1:
-            data = await _extract_section_anthropic(sections[0], hint_block)
-        else:
-            section_results = await asyncio.gather(
-                *[_extract_section_anthropic(s, hint_block) for s in sections],
-                return_exceptions=True
-            )
-            valid = [r for r in section_results if isinstance(r, dict)]
-            data = _merge_section_results(valid)
+        data = await _run_sections_with_progress(policy_id, sections, _extract_section_anthropic, hint_block)
     else:
         model = genai.GenerativeModel(
             model_name=settings.gemini_model,
             system_instruction=EXTRACTION_SYSTEM_PROMPT,
         )
         log.info("Sending to Gemini", sections=len(sections), total_chars=len(raw_text))
-        if len(sections) == 1:
-            data = await _extract_section(model, sections[0], hint_block)
-        else:
-            section_results = await asyncio.gather(
-                *[_extract_section(model, s, hint_block) for s in sections],
-                return_exceptions=True
-            )
-            valid = [r for r in section_results if isinstance(r, dict)]
-            data = _merge_section_results(valid)
+
+        async def _gemini_extract(section, hint):
+            return await _extract_section(model, section, hint)
+
+        data = await _run_sections_with_progress(policy_id, sections, _gemini_extract, hint_block)
 
     if not data:
         if selected_provider in {"ollama", "groq"}:
