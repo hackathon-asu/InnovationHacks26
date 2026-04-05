@@ -1,0 +1,12 @@
+{
+  "payer": "UnitedHealthcare",
+  "drug_name": "Rituxan",
+  "source_url": "https://www.uhcprovider.com/content/dam/provider/docs/public/policies/comm-medical-drug/rituxan-rituximab.pdf",
+  "local_path": "policies/unitedhealthcare/rituxan/rituxan-rituximab_v2.pdf",
+  "content_type": "pdf",
+  "filename": "rituxan-rituximab_v2.pdf",
+  "file_hash": "7a6ece153ef67cd31e92188352c514812ee042ae5838100825a30e3d8bdcf2e7",
+  "effective_date": null,
+  "retrieved_at": "2026-04-05T03:58:26.468699",
+  "is_new": true
+}
