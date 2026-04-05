@@ -4,7 +4,7 @@
  * CC BY-NC-SA 4.0
  * Commercial use: chatgpt@asu.edu
  * -------------------------------- */
-const FASTAPI = 'http://localhost:8000';
+const FASTAPI = process.env.FASTAPI_URL ?? 'http://localhost:8000';
 
 export async function GET(
   _req: Request,
