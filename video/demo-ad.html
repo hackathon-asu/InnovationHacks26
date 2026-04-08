@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080, height=1920">
+<title>InsightRX - Demo Ad</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --navy: #15173F;
+    --dark: #0D0F2B;
+    --sky: #91BFEB;
+    --sky-light: #dceeff;
+    --accent: #4AEDC4;
+    --white: #FFFFFF;
+    --off-white: #F0EDE8;
+    --red: #FF6B6B;
+    --amber: #FFB347;
+    --emerald: #34D399;
+    --purple: #A78BFA;
+  }
+
+  body {
+    width: 1080px;
+    height: 1920px;
+    overflow: hidden;
+    background: var(--dark);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .scene {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    padding: 0 70px;
+    z-index: 1;
+  }
+
+  /* ── Background ──────────────────────────────────────── */
+  .bg {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(160deg, var(--dark) 0%, var(--navy) 50%, #1a1d4a 100%);
+    z-index: 0;
+  }
+  .bg-grid {
+    position: fixed;
+    inset: -100px;
+    background-image:
+      linear-gradient(rgba(145,191,235,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(145,191,235,0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+    z-index: 0;
+    animation: gridScroll 40s linear infinite;
+  }
+  @keyframes gridScroll {
+    to { transform: translateY(-120px); }
+  }
+  .bg-vignette {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(13,15,43,0.85) 100%);
+    z-index: 0;
+  }
+
+  /* ── Glow Orbs ───────────────────────────────────────── */
+  .orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(50px);
+    pointer-events: none;
+    animation: orbPulse 4s ease-in-out infinite;
+  }
+  @keyframes orbPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.12); }
+  }
+
+  /* ── Animations ──────────────────────────────────────── */
+  @keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(35px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeSlideRight {
+    from { opacity: 0; transform: translateX(-40px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes fadeSlideLeft {
+    from { opacity: 0; transform: translateX(40px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.7); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes scaleInBounce {
+    0% { opacity: 0; transform: scale(0) rotate(-180deg); }
+    70% { transform: scale(1.1) rotate(5deg); }
+    100% { opacity: 1; transform: scale(1) rotate(0deg); }
+  }
+  @keyframes lineGrow {
+    from { width: 0; }
+    to { width: 100%; }
+  }
+  @keyframes ringExpand {
+    from { transform: scale(0.8); opacity: 0.5; }
+    to { transform: scale(2); opacity: 0; }
+  }
+  @keyframes cardFloat {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+  }
+  @keyframes typewriter {
+    from { width: 0; }
+    to { width: 100%; }
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  @keyframes stageProgress {
+    from { width: 0%; }
+    to { width: 100%; }
+  }
+
+  .anim {
+    animation-fill-mode: both;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* ── Shared Typography ───────────────────────────────── */
+  .headline {
+    font-size: 56px;
+    font-weight: 900;
+    color: var(--white);
+    line-height: 1.15;
+    text-align: center;
+    letter-spacing: -1.5px;
+  }
+  .subhead {
+    font-size: 30px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.65);
+    text-align: center;
+    line-height: 1.4;
+  }
+  .label {
+    font-size: 16px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--sky);
+  }
+  .mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── Scene Transitions ───────────────────────────────── */
+  .scene-enter {
+    animation: fadeIn 0.5s ease forwards;
+  }
+  .scene-exit {
+    animation: fadeIn 0.5s ease reverse forwards;
+  }
+
+  /* ── UI Card ─────────────────────────────────────────── */
+  .ui-card {
+    background: var(--white);
+    border-radius: 24px;
+    padding: 32px;
+    box-shadow: 0 25px 80px rgba(0,0,0,0.25);
+    width: 920px;
+    position: relative;
+    overflow: hidden;
+  }
+  .ui-card.glow {
+    box-shadow: 0 0 60px rgba(145,191,235,0.25), 0 25px 80px rgba(0,0,0,0.3);
+  }
+
+  /* ── Glass Card ──────────────────────────────────────── */
+  .glass {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* ── Pain Point Row ──────────────────────────────────── */
+  .pain-row {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 20px 28px;
+    margin-bottom: 16px;
+    border-radius: 16px;
+  }
+  .pain-row .icon { font-size: 36px; }
+  .pain-row .text {
+    font-size: 30px;
+    font-weight: 600;
+    color: var(--white);
+  }
+
+  /* ── Feature Counter ─────────────────────────────────── */
+  .feat-counter {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--sky);
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-bottom: 16px;
+  }
+
+  /* ── Pipeline Stage ──────────────────────────────────── */
+  .pipeline-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+  }
+  .pipeline-stage {
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    border: 1px solid #ddd;
+    background: var(--off-white);
+    color: #999;
+    transition: all 0.4s ease;
+  }
+  .pipeline-stage.active {
+    background: rgba(145,191,235,0.15);
+    border-color: var(--sky);
+    color: var(--navy);
+  }
+  .pipeline-arrow {
+    font-size: 16px;
+    color: #ccc;
+  }
+
+  /* ── Comparison Table ────────────────────────────────── */
+  .compare-header {
+    display: flex;
+    gap: 12px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--off-white);
+    margin-bottom: 8px;
+  }
+  .compare-header span {
+    flex: 1;
+    font-size: 12px;
+    font-weight: 700;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .compare-row {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    align-items: center;
+  }
+  .compare-row + .compare-row { border-top: 1px solid #f0f0f0; }
+  .compare-row .cell { flex: 1; font-size: 15px; color: #555; }
+  .compare-row .payer { font-weight: 700; color: var(--navy); font-size: 16px; }
+  .badge {
+    display: inline-block;
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  /* ── Chat Bubble ─────────────────────────────────────── */
+  .chat-q {
+    align-self: flex-end;
+    background: var(--navy);
+    color: var(--white);
+    padding: 14px 20px;
+    border-radius: 18px 18px 4px 18px;
+    font-size: 16px;
+    max-width: 80%;
+  }
+  .chat-a-wrap { display: flex; gap: 12px; align-items: flex-start; }
+  .chat-avatar {
+    width: 36px; height: 36px;
+    border-radius: 18px;
+    background: var(--sky);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 800; color: var(--navy);
+    flex-shrink: 0;
+  }
+  .chat-a {
+    background: var(--off-white);
+    padding: 14px 20px;
+    border-radius: 18px 18px 18px 4px;
+    font-size: 15px;
+    color: var(--navy);
+    line-height: 1.55;
+  }
+
+  /* ── Change Row ──────────────────────────────────────── */
+  .change-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    margin-bottom: 8px;
+  }
+  .change-dot {
+    width: 10px; height: 10px;
+    border-radius: 5px;
+    flex-shrink: 0;
+  }
+  .change-label {
+    font-size: 13px;
+    font-weight: 700;
+    min-width: 75px;
+  }
+  .change-desc {
+    font-size: 15px;
+    color: var(--navy);
+  }
+
+  /* ── Diff Grid ───────────────────────────────────────── */
+  .diff-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    justify-content: center;
+    max-width: 940px;
+  }
+  .diff-card {
+    width: 290px;
+    padding: 24px 20px;
+    border-radius: 20px;
+    text-align: center;
+  }
+  .diff-card .icon { font-size: 38px; margin-bottom: 10px; }
+  .diff-card .text {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--white);
+    line-height: 1.3;
+    white-space: pre-line;
+  }
+
+  /* ── Stat Row ────────────────────────────────────────── */
+  .stat-row {
+    display: flex;
+    gap: 28px;
+    border-top: 1px solid var(--off-white);
+    padding-top: 18px;
+    margin-top: 20px;
+  }
+  .stat-num {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--navy);
+  }
+  .stat-label {
+    font-size: 12px;
+    color: #888;
+    margin-top: 2px;
+  }
+
+  /* ── Tech Stack Pills ────────────────────────────────── */
+  .tech-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 20px;
+  }
+  .tech-pill {
+    padding: 8px 18px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--white);
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.06);
+  }
+
+  /* ── Outro Bottom Bar ────────────────────────────────── */
+  .bottom-bar {
+    position: absolute;
+    bottom: 60px;
+    left: 0; right: 0;
+    display: flex;
+    justify-content: center;
+  }
+  .bottom-bar-inner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 16px;
+    padding: 14px 28px;
+    backdrop-filter: blur(12px);
+  }
+  .bottom-bar-inner svg { fill: var(--white); }
+  .bottom-bar-inner span {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--white);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── Divider Line ────────────────────────────────────── */
+  .divider {
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--sky), transparent);
+    margin: 32px 0;
+    overflow: hidden;
+  }
+  .divider-inner {
+    height: 100%;
+    background: inherit;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════ BACKGROUND ═══════════════════ -->
+<div class="bg"></div>
+<div class="bg-grid"></div>
+<div class="bg-vignette"></div>
+
+<!-- ═══════════════════ SCENE 1: HOOK (0-3s) ═══════════════════ -->
+<div class="scene" id="scene-hook">
+  <div class="orb" style="width:450px;height:450px;background:radial-gradient(circle,rgba(255,107,107,0.2),transparent 70%);top:400px;left:300px;"></div>
+  <div class="orb" style="width:350px;height:350px;background:radial-gradient(circle,rgba(145,191,235,0.18),transparent 70%);top:1200px;left:100px;animation-delay:1s;"></div>
+
+  <div style="width:100px;height:100px;border-radius:24px;background:linear-gradient(135deg,var(--red),var(--amber));display:flex;align-items:center;justify-content:center;box-shadow:0 10px 40px rgba(255,107,107,0.35);margin-bottom:40px;"
+       class="anim" style="animation: scaleInBounce 0.6s;">
+    <span style="font-size:44px;font-weight:900;color:white;" class="mono">Rx</span>
+  </div>
+
+  <div class="headline anim" data-delay="0.2">Your patient needs a drug.</div>
+  <div class="headline anim" data-delay="0.5" style="color:var(--sky);margin-top:10px;">Which payer covers it?</div>
+
+  <div class="divider anim" data-delay="0.9" style="width:700px;">
+    <div class="divider-inner"></div>
+  </div>
+
+  <div class="subhead anim" data-delay="1.2">Good luck finding out.</div>
+</div>
+
+<!-- ═══════════════════ SCENE 2: PROBLEM (3-7s) ═══════════════════ -->
+<div class="scene" id="scene-problem">
+  <div class="orb" style="width:400px;height:400px;background:radial-gradient(circle,rgba(255,107,107,0.18),transparent 70%);top:300px;right:50px;"></div>
+
+  <div class="headline anim" data-delay="0" style="color:var(--red);text-align:left;align-self:flex-start;font-size:48px;">The status quo is broken.</div>
+
+  <div style="margin-top:45px;width:100%;">
+    <div class="pain-row glass anim" data-delay="0.3" data-anim="fadeSlideRight">
+      <span class="icon">&#x1F4C4;</span>
+      <span class="text">200+ page PDFs per payer</span>
+    </div>
+    <div class="pain-row glass anim" data-delay="0.6" data-anim="fadeSlideRight">
+      <span class="icon">&#x1F50D;</span>
+      <span class="text">Manual Ctrl+F for drug names</span>
+    </div>
+    <div class="pain-row glass anim" data-delay="0.9" data-anim="fadeSlideRight">
+      <span class="icon">&#x23F3;</span>
+      <span class="text">Hours to compare one drug</span>
+    </div>
+    <div class="pain-row glass anim" data-delay="1.2" data-anim="fadeSlideRight">
+      <span class="icon">&#x1F6AB;</span>
+      <span class="text">Policies change without warning</span>
+    </div>
+  </div>
+
+  <div class="subhead anim" data-delay="1.8" style="margin-top:30px;text-align:left;align-self:flex-start;font-size:26px;">
+    Healthcare teams deserve better.
+  </div>
+</div>
+
+<!-- ═══════════════════ SCENE 3: REVEAL (7-12s) ═══════════════════ -->
+<div class="scene" id="scene-reveal">
+  <div class="orb" style="width:550px;height:550px;background:radial-gradient(circle,rgba(145,191,235,0.2),transparent 70%);top:600px;left:250px;"></div>
+  <div class="orb" style="width:350px;height:350px;background:radial-gradient(circle,rgba(74,237,196,0.15),transparent 70%);top:400px;left:150px;animation-delay:1.5s;"></div>
+
+  <!-- Ring effect -->
+  <div class="anim" data-delay="0.3" style="position:absolute;width:180px;height:180px;border-radius:50%;border:3px solid var(--sky);animation:ringExpand 1.5s ease-out 0.5s forwards;opacity:0.5;top:calc(50% - 290px);"></div>
+
+  <div style="width:120px;height:120px;border-radius:28px;background:linear-gradient(135deg,var(--sky),var(--accent));display:flex;align-items:center;justify-content:center;box-shadow:0 20px 60px rgba(145,191,235,0.4);margin-bottom:28px;"
+       class="anim" data-delay="0.1" data-anim="scaleIn">
+    <span style="font-size:50px;font-weight:900;color:var(--navy);" class="mono">iRx</span>
+  </div>
+
+  <div class="headline anim" data-delay="0.4" style="font-size:72px;letter-spacing:-2px;">InsightRX</div>
+  <div class="anim" data-delay="0.7" style="font-size:30px;font-weight:500;color:var(--sky);text-align:center;">Every payer. Every drug. One search.</div>
+
+  <!-- Dashboard preview card -->
+  <div class="ui-card glow anim" data-delay="1.0" data-anim="fadeSlideUp" style="margin-top:45px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--sky);text-transform:uppercase;letter-spacing:1.5px;">Policy Intelligence Dashboard</div>
+        <div style="font-size:28px;font-weight:800;color:var(--navy);margin-top:4px;">AntonRX</div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <div style="padding:8px 16px;border-radius:10px;font-size:13px;font-weight:600;background:var(--sky);color:var(--navy);">Upload PDF</div>
+        <div style="padding:8px 16px;border-radius:10px;font-size:13px;font-weight:600;border:1px solid rgba(21,23,63,0.2);color:var(--navy);">Auto-Fetch</div>
+      </div>
+    </div>
+    <div class="stat-row">
+      <div><div class="stat-num">47</div><div class="stat-label">Policies</div></div>
+      <div><div class="stat-num">312</div><div class="stat-label">Drugs</div></div>
+      <div><div class="stat-num">5</div><div class="stat-label">Payers</div></div>
+      <div><div class="stat-num">23</div><div class="stat-label">Changes</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ SCENE 4A: FEATURE 1 - PIPELINE (12-14.5s) ═══════════════════ -->
+<div class="scene" id="scene-feat1">
+  <div class="orb" style="width:450px;height:450px;background:radial-gradient(circle,rgba(145,191,235,0.18),transparent 70%);top:550px;left:300px;"></div>
+
+  <div class="feat-counter anim" data-delay="0">01 / 04</div>
+  <div class="headline anim" data-delay="0.15" style="font-size:52px;">8-Stage AI Pipeline</div>
+  <div class="subhead anim" data-delay="0.35" style="margin-top:10px;font-size:28px;">Upload a PDF. Get structured drug data.</div>
+
+  <div class="ui-card glow anim" data-delay="0.6" data-anim="fadeSlideUp" style="margin-top:40px;">
+    <div class="pipeline-row" id="pipeline-stages">
+      <!-- Filled by JS -->
+    </div>
+    <div style="margin-top:18px;font-size:15px;color:#888;text-align:center;" class="mono">
+      Docling (97.9% table accuracy) &#x2192; scispaCy/Med7 NER &#x2192; Gemini 2.5 Flash &#x2192; pgvector
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ SCENE 4B: FEATURE 2 - COMPARE (14.5-17s) ═══════════════════ -->
+<div class="scene" id="scene-feat2">
+  <div class="orb" style="width:450px;height:450px;background:radial-gradient(circle,rgba(74,237,196,0.16),transparent 70%);top:550px;left:300px;"></div>
+
+  <div class="feat-counter anim" data-delay="0" style="color:var(--accent);">02 / 04</div>
+  <div class="headline anim" data-delay="0.15" style="font-size:52px;">Cross-Payer Comparison</div>
+  <div class="subhead anim" data-delay="0.35" style="margin-top:10px;font-size:28px;">Side-by-side coverage, PA, step therapy.</div>
+
+  <div class="ui-card glow anim" data-delay="0.6" data-anim="fadeSlideUp" style="margin-top:40px;">
+    <div style="font-size:20px;font-weight:800;color:var(--navy);margin-bottom:14px;">Bevacizumab <span class="mono" style="font-size:14px;color:#999;font-weight:500;">J9035</span></div>
+    <div class="compare-header">
+      <span>Payer</span><span>Coverage</span><span>Prior Auth</span><span>Step Therapy</span>
+    </div>
+    <div class="compare-row anim" data-delay="0.8">
+      <div class="cell payer">Cigna</div>
+      <div class="cell"><span class="badge" style="background:rgba(52,211,153,0.15);color:var(--emerald);">Covered</span></div>
+      <div class="cell">Required</div>
+      <div class="cell">Yes</div>
+    </div>
+    <div class="compare-row anim" data-delay="1.0">
+      <div class="cell payer">UHC</div>
+      <div class="cell"><span class="badge" style="background:rgba(255,179,71,0.15);color:var(--amber);">Conditional</span></div>
+      <div class="cell">Required</div>
+      <div class="cell">No</div>
+    </div>
+    <div class="compare-row anim" data-delay="1.2">
+      <div class="cell payer">Priority Health</div>
+      <div class="cell"><span class="badge" style="background:rgba(255,107,107,0.15);color:var(--red);">Not Covered</span></div>
+      <div class="cell">N/A</div>
+      <div class="cell">No</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ SCENE 4C: FEATURE 3 - RAG CHAT (17-19.5s) ═══════════════════ -->
+<div class="scene" id="scene-feat3">
+  <div class="orb" style="width:450px;height:450px;background:radial-gradient(circle,rgba(167,139,250,0.16),transparent 70%);top:550px;left:300px;"></div>
+
+  <div class="feat-counter anim" data-delay="0" style="color:var(--purple);">03 / 04</div>
+  <div class="headline anim" data-delay="0.15" style="font-size:52px;">RAG-Powered Q&A</div>
+  <div class="subhead anim" data-delay="0.35" style="margin-top:10px;font-size:28px;">Ask questions. Get cited answers.</div>
+
+  <div class="ui-card glow anim" data-delay="0.6" data-anim="fadeSlideUp" style="margin-top:40px;">
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      <div class="chat-q anim" data-delay="0.8">Which plans cover bevacizumab?</div>
+      <div class="chat-a-wrap anim" data-delay="1.1">
+        <div class="chat-avatar">AI</div>
+        <div class="chat-a">
+          <strong>Cigna</strong> covers bevacizumab (J9035) under medical benefit with <em>prior auth required</em>. <strong>UHC</strong> covers it as conditional with step therapy through biosimilar first. <strong>Priority Health</strong> does not cover this drug.
+          <div style="margin-top:10px;font-size:12px;color:#999;">
+            <span style="color:var(--sky);">&#x25CF;</span> Sources: Cigna MBD-2024-047 p.12, UHC MP-2024-103 p.8
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ SCENE 4D: FEATURE 4 - CHANGES (19.5-22s) ═══════════════════ -->
+<div class="scene" id="scene-feat4">
+  <div class="orb" style="width:450px;height:450px;background:radial-gradient(circle,rgba(255,179,71,0.16),transparent 70%);top:550px;left:300px;"></div>
+
+  <div class="feat-counter anim" data-delay="0" style="color:var(--amber);">04 / 04</div>
+  <div class="headline anim" data-delay="0.15" style="font-size:52px;">Change Detection</div>
+  <div class="subhead anim" data-delay="0.35" style="margin-top:10px;font-size:28px;">Know when policies shift beneath you.</div>
+
+  <div class="ui-card glow anim" data-delay="0.6" data-anim="fadeSlideUp" style="margin-top:40px;">
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <div class="change-row anim" data-delay="0.8" style="background:rgba(255,107,107,0.06);border:1px solid rgba(255,107,107,0.15);">
+        <div class="change-dot" style="background:var(--red);"></div>
+        <span class="change-label" style="color:var(--red);">Breaking</span>
+        <span class="change-desc">Rituxan removed from Cigna coverage</span>
+      </div>
+      <div class="change-row anim" data-delay="1.0" style="background:rgba(255,179,71,0.06);border:1px solid rgba(255,179,71,0.15);">
+        <div class="change-dot" style="background:var(--amber);"></div>
+        <span class="change-label" style="color:var(--amber);">Material</span>
+        <span class="change-desc">New ICD-10 codes added for Avastin</span>
+      </div>
+      <div class="change-row anim" data-delay="1.2" style="background:rgba(145,191,235,0.06);border:1px solid rgba(145,191,235,0.15);">
+        <div class="change-dot" style="background:var(--sky);"></div>
+        <span class="change-label" style="color:var(--sky);">Minor</span>
+        <span class="change-desc">Effective date updated to Q2 2026</span>
+      </div>
+    </div>
+    <div style="margin-top:16px;font-size:14px;color:#888;text-align:center;" class="mono">
+      Semantic diff + LLM significance classification
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ SCENE 5: DIFFERENTIATOR (22-26s) ═══════════════════ -->
+<div class="scene" id="scene-diff">
+  <div class="orb" style="width:600px;height:600px;background:radial-gradient(circle,rgba(74,237,196,0.14),transparent 70%);top:650px;left:230px;"></div>
+
+  <div class="headline anim" data-delay="0" style="margin-bottom:36px;">Built different.</div>
+
+  <div class="diff-grid">
+    <div class="diff-card glass anim" data-delay="0.2" data-anim="scaleIn">
+      <div class="icon">&#x26A1;</div>
+      <div class="text">8-stage automated pipeline</div>
+    </div>
+    <div class="diff-card glass anim" data-delay="0.35" data-anim="scaleIn">
+      <div class="icon">&#x1F30E;</div>
+      <div class="text">Multi-payer auto-fetch</div>
+    </div>
+    <div class="diff-card glass anim" data-delay="0.5" data-anim="scaleIn">
+      <div class="icon">&#x1F9EC;</div>
+      <div class="text">Biomedical NLP + RxNorm</div>
+    </div>
+    <div class="diff-card glass anim" data-delay="0.65" data-anim="scaleIn">
+      <div class="icon">&#x1F50E;</div>
+      <div class="text">Hybrid RAG vector search</div>
+    </div>
+    <div class="diff-card glass anim" data-delay="0.8" data-anim="scaleIn">
+      <div class="icon">&#x1F504;</div>
+      <div class="text">Semantic change detection</div>
+    </div>
+    <div class="diff-card glass anim" data-delay="0.95" data-anim="scaleIn">
+      <div class="icon">&#x1F916;</div>
+      <div class="text">5 swappable LLM providers</div>
+    </div>
+  </div>
+
+  <div class="tech-row anim" data-delay="1.2">
+    <div class="tech-pill">Next.js 16</div>
+    <div class="tech-pill">FastAPI</div>
+    <div class="tech-pill">pgvector</div>
+    <div class="tech-pill">Docling</div>
+    <div class="tech-pill">RxNorm</div>
+    <div class="tech-pill">Gemini 2.5</div>
+  </div>
+</div>
+
+<!-- ═══════════════════ SCENE 6: OUTRO (26-30s) ═══════════════════ -->
+<div class="scene" id="scene-outro">
+  <div class="orb" style="width:550px;height:550px;background:radial-gradient(circle,rgba(145,191,235,0.2),transparent 70%);top:550px;left:250px;"></div>
+  <div class="orb" style="width:400px;height:400px;background:radial-gradient(circle,rgba(74,237,196,0.15),transparent 70%);top:900px;left:350px;animation-delay:2s;"></div>
+
+  <!-- Expanding ring -->
+  <div style="position:absolute;width:180px;height:180px;border-radius:50%;border:2px solid var(--sky);top:calc(50% - 310px);"
+       class="anim" data-delay="0.4" data-anim="ringExpand"></div>
+
+  <div style="width:130px;height:130px;border-radius:32px;background:linear-gradient(135deg,var(--sky),var(--accent));display:flex;align-items:center;justify-content:center;box-shadow:0 20px 80px rgba(145,191,235,0.5);margin-bottom:28px;"
+       class="anim" data-delay="0.1" data-anim="scaleIn">
+    <span style="font-size:54px;font-weight:900;color:var(--navy);" class="mono">iRx</span>
+  </div>
+
+  <div class="headline anim" data-delay="0.3" style="font-size:76px;letter-spacing:-2px;">InsightRX</div>
+  <div class="anim" data-delay="0.6" style="font-size:28px;font-weight:500;color:var(--sky);text-align:center;">Every payer. Every drug. One search.</div>
+
+  <div class="divider anim" data-delay="0.9" style="width:600px;">
+    <div class="divider-inner"></div>
+  </div>
+
+  <div class="anim" data-delay="1.1" style="font-size:24px;font-weight:600;color:rgba(255,255,255,0.7);text-align:center;">
+    Innovation Hacks 2.0 @ ASU
+  </div>
+  <div class="anim" data-delay="1.3" style="font-size:22px;font-weight:500;color:rgba(255,255,255,0.5);text-align:center;margin-top:6px;">
+    Team The Formulators
+  </div>
+  <div class="anim" data-delay="1.5" style="font-size:20px;font-weight:500;color:rgba(255,255,255,0.4);text-align:center;margin-top:4px;">
+    Abhinav &middot; Neeharika &middot; Adi
+  </div>
+
+  <div class="bottom-bar anim" data-delay="1.7" data-anim="fadeSlideUp">
+    <div class="bottom-bar-inner">
+      <svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+      <span>github.com/hackathon-asu/InnovationHacks26</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ PROGRESS BAR ═══════════════════ -->
+<div style="position:fixed;bottom:0;left:0;right:0;height:4px;background:rgba(255,255,255,0.1);z-index:100;">
+  <div id="progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--sky),var(--accent));transition:width 0.1s linear;"></div>
+</div>
+
+<script>
+(function() {
+  /* ── Scene Timeline ──────────────────────────────────── */
+  const timeline = [
+    { id: 'scene-hook',    start: 0,    end: 3000  },
+    { id: 'scene-problem', start: 3000, end: 7000  },
+    { id: 'scene-reveal',  start: 7000, end: 12000 },
+    { id: 'scene-feat1',   start: 12000, end: 14500 },
+    { id: 'scene-feat2',   start: 14500, end: 17000 },
+    { id: 'scene-feat3',   start: 17000, end: 19500 },
+    { id: 'scene-feat4',   start: 19500, end: 22000 },
+    { id: 'scene-diff',    start: 22000, end: 26000 },
+    { id: 'scene-outro',   start: 26000, end: 30000 },
+  ];
+
+  const TOTAL = 30000;
+  const progressBar = document.getElementById('progress-bar');
+  let startTime = null;
+  let currentScene = null;
+
+  /* ── Pipeline stages (Scene 4A) ──────────────────────── */
+  const pipelineContainer = document.getElementById('pipeline-stages');
+  const stages = ['Parse', 'NLP', 'LLM', 'RxNorm', 'Store', 'Chunk', 'Embed', 'Index'];
+  stages.forEach((s, i) => {
+    if (i > 0) {
+      const arrow = document.createElement('span');
+      arrow.className = 'pipeline-arrow';
+      arrow.textContent = '\u2192';
+      pipelineContainer.appendChild(arrow);
+    }
+    const el = document.createElement('div');
+    el.className = 'pipeline-stage';
+    el.textContent = s;
+    el.dataset.index = i;
+    pipelineContainer.appendChild(el);
+  });
+
+  /* ── Animate .anim elements inside a scene ───────────── */
+  function activateScene(sceneEl, sceneStart, now) {
+    const elapsed = now - sceneStart;
+    const anims = sceneEl.querySelectorAll('.anim');
+
+    anims.forEach(el => {
+      if (el.dataset.activated) return;
+      const delay = parseFloat(el.dataset.delay || 0) * 1000;
+      if (elapsed >= delay) {
+        const animName = el.dataset.anim || 'fadeSlideUp';
+        el.style.animation = `${animName} 0.5s cubic-bezier(0.16,1,0.3,1) forwards`;
+        el.dataset.activated = '1';
+      }
+    });
+
+    /* Pipeline stage activation */
+    if (sceneEl.id === 'scene-feat1') {
+      const stageEls = sceneEl.querySelectorAll('.pipeline-stage');
+      stageEls.forEach(el => {
+        const idx = parseInt(el.dataset.index);
+        const stageDelay = 800 + idx * 120;
+        if (elapsed >= stageDelay) {
+          el.classList.add('active');
+        }
+      });
+    }
+  }
+
+  /* ── Main Loop ───────────────────────────────────────── */
+  function tick(timestamp) {
+    if (!startTime) startTime = timestamp;
+    const elapsed = timestamp - startTime;
+
+    /* Progress bar */
+    const pct = Math.min((elapsed / TOTAL) * 100, 100);
+    progressBar.style.width = pct + '%';
+
+    /* Scene switching */
+    let activeEntry = null;
+    for (const entry of timeline) {
+      if (elapsed >= entry.start && elapsed < entry.end) {
+        activeEntry = entry;
+        break;
+      }
+    }
+
+    /* Show last scene if past end */
+    if (!activeEntry && elapsed >= TOTAL) {
+      activeEntry = timeline[timeline.length - 1];
+    }
+
+    if (activeEntry) {
+      const sceneEl = document.getElementById(activeEntry.id);
+
+      if (currentScene !== activeEntry.id) {
+        /* Hide previous */
+        document.querySelectorAll('.scene').forEach(s => {
+          if (s.id !== activeEntry.id) {
+            s.style.opacity = '0';
+            s.style.transition = 'opacity 0.35s ease';
+            /* Reset animations for re-entry */
+            s.querySelectorAll('.anim').forEach(a => {
+              a.dataset.activated = '';
+              a.style.animation = 'none';
+              a.style.opacity = '0';
+            });
+            s.querySelectorAll('.pipeline-stage').forEach(p => p.classList.remove('active'));
+          }
+        });
+
+        /* Show new */
+        sceneEl.style.opacity = '1';
+        sceneEl.style.transition = 'opacity 0.4s ease';
+        currentScene = activeEntry.id;
+      }
+
+      activateScene(sceneEl, startTime + activeEntry.start, startTime + elapsed);
+    }
+
+    if (elapsed < TOTAL + 2000) {
+      requestAnimationFrame(tick);
+    }
+  }
+
+  /* ── Start after brief pause ─────────────────────────── */
+  setTimeout(() => {
+    requestAnimationFrame(tick);
+  }, 500);
+})();
+</script>
+</body>
+</html>
