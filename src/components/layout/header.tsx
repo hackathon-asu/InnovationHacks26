@@ -14,7 +14,7 @@ export function Header() {
         {/* Spacer for mobile hamburger */}
         <div className="w-8 md:hidden" />
         <Link href="/" className="text-sm text-muted-foreground md:hidden">
-          Anton <span className="text-primary font-medium">RX</span> Track
+          Insight <span className="text-primary font-medium">RX</span>
         </Link>
       </div>
       <div className="flex items-center gap-3">
