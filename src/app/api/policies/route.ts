@@ -7,8 +7,11 @@
 const FASTAPI = process.env.FASTAPI_URL ?? 'http://localhost:8000';
 
 export async function GET() {
-  return Response.json(
-    { policies: [], message: 'Policies API has been disabled. The hackathon demo period has ended.' },
-    { status: 403 }
-  );
+  try {
+    const res = await fetch(`${FASTAPI}/api/v1/ingest/policies`);
+    const data = await res.json();
+    return Response.json(data);
+  } catch {
+    return Response.json({ policies: [] });
+  }
 }
