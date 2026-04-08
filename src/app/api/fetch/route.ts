@@ -6,32 +6,15 @@
  * -------------------------------- */
 const FASTAPI = process.env.FASTAPI_URL ?? 'http://localhost:8000';
 
-// POST /api/fetch  → proxy to FastAPI POST /api/v1/fetch/policies
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const res = await fetch(`${FASTAPI}/api/v1/fetch/policies`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    return Response.json(data, { status: res.status });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Fetch failed';
-    return Response.json({ error: message }, { status: 500 });
-  }
+// POST /api/fetch — disabled after hackathon
+export async function POST() {
+  return Response.json(
+    { error: 'Policy fetching has been disabled. The hackathon demo period has ended.' },
+    { status: 403 }
+  );
 }
 
-// GET /api/fetch?payer=...&drug=... → proxy to FastAPI GET /api/v1/fetch/stored
-export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const qs = searchParams.toString();
-    const res = await fetch(`${FASTAPI}/api/v1/fetch/stored${qs ? `?${qs}` : ''}`);
-    const data = await res.json();
-    return Response.json(data);
-  } catch (err) {
-    return Response.json({ count: 0, items: [] });
-  }
+// GET /api/fetch — disabled after hackathon
+export async function GET() {
+  return Response.json({ count: 0, items: [] });
 }

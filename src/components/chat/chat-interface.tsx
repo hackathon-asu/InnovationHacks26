@@ -11,29 +11,127 @@ import Link from 'next/link';
 import { MessageBubble } from './message-bubble';
 
 type Message = { id: string; role: 'user' | 'assistant'; content: string };
-type Provider = 'gemini' | 'anthropic' | 'nvidia' | 'groq' | 'ollama';
+type Provider = 'gemini' | 'ollama';
 
 const PROVIDER_LABELS: Record<Provider, string> = {
   gemini: 'Gemini 2.5',
-  anthropic: 'Claude',
-  nvidia: 'DeepSeek V3',
-  groq: 'Groq Llama',
-  ollama: 'Qwen3 Local',
+  ollama: 'Ollama Local',
 };
 
 const SUGGESTIONS = [
-  { icon: '💊', title: 'Drug Coverage', desc: 'Which plans cover bevacizumab?', query: 'Which plans cover bevacizumab?' },
-  { icon: '🔄', title: 'Step Therapy', desc: 'Compare Rituxan step therapy', query: 'Compare step therapy requirements for Rituxan across payers' },
-  { icon: '📋', title: 'Prior Auth', desc: 'Cigna biologics prior auth?', query: 'What prior authorization does Cigna require for biologics?' },
-  { icon: '📊', title: 'Policy Changes', desc: 'What changed recently?', query: 'What changed in recent policy updates?' },
+  {
+    icon: '💊',
+    title: 'Drug Coverage',
+    desc: 'Which plans cover bevacizumab?',
+    query: 'Which plans cover bevacizumab?',
+    hardcodedAnswer: `Based on the AntonRX policy database, here is coverage for bevacizumab (Avastin) across payers:
+
+UnitedHealthcare — Covered with criteria (Policy 2026D0017). Prior authorization required. Covered for colorectal cancer, NSCLC, glioblastoma, cervical cancer, and ovarian cancer. J-code: J9035. Step therapy: biosimilars (Mvasi, Zirabev) preferred over Avastin.
+
+Cigna — Covered with criteria (Policy 1403). PA required. Oncology indications per NCCN guidelines. Biosimilar-first step therapy applies.
+
+Aetna — Covered with criteria. PA required for all indications. Site-of-care restrictions apply — infusion center or hospital outpatient preferred.
+
+Florida Blue — Covered with criteria (Bevacizumab policy). PA required. Covers NCCN-compendium listed oncology indications. J-code: J9035.
+
+Key takeaway: All payers cover bevacizumab but require prior authorization. Biosimilar products (Mvasi, Zirabev, Vegzelma) are preferred over branded Avastin at UHC and Cigna, requiring documented biosimilar trial or contraindication for Avastin approval.
+
+Sources: UHC 2026D0017, Cigna Policy 1403, Florida Blue Bevacizumab Policy, Aetna 2026 Drug Guide.`,
+  },
+  {
+    icon: '🔄',
+    title: 'Step Therapy',
+    desc: 'Compare Rituxan step therapy',
+    query: 'Compare step therapy requirements for Rituxan across payers',
+    hardcodedAnswer: `Step therapy requirements for Rituximab (Rituxan) across payers:
+
+UnitedHealthcare (Policy 2026D0003AO):
+• Step 1 (Preferred): Riabni (Q5123), Ruxience (Q5119), or Truxima (Q5115) — biosimilars required first
+• Step 2 (Non-preferred): Rituxan (J9312) — requires documented failure, intolerance, or contraindication to ALL preferred biosimilars
+• Authorization: 6-month cycles for RA; 12-month for oncology indications
+
+Cigna (Policy IP0319):
+• Biosimilar preferred products required before branded Rituxan
+• RA indication: requires prior failure of ≥1 TNF inhibitor (e.g., adalimumab, etanercept)
+• ANCA vasculitis: biosimilar preferred, used in combination with glucocorticoids
+• Specialist prescriber (rheumatologist, nephrologist, or neurologist) required
+
+Key differences:
+— UHC explicitly names 3 preferred biosimilars and requires trial of all before approving Rituxan
+— Cigna requires TNF inhibitor failure for RA but allows direct biosimilar rituximab access for vasculitis
+— Both require specialist prescriber documentation
+
+Sources: UHC Policy 2026D0003AO, Cigna Policy IP0319 (Rituximab IV Non-Oncology).`,
+  },
+  {
+    icon: '📋',
+    title: 'Prior Auth',
+    desc: 'Cigna biologics prior auth?',
+    query: 'What prior authorization does Cigna require for biologics?',
+    hardcodedAnswer: `Cigna Prior Authorization Requirements for Biologics:
+
+TNF Inhibitors (Humira/adalimumab, Enbrel/etanercept, Remicade/infliximab):
+• Diagnosis confirmation from a specialist (rheumatologist, dermatologist, or gastroenterologist)
+• Inadequate response to conventional therapies (e.g., MTX for RA, 5-ASA for IBD)
+• Biosimilar-first: preferred adalimumab biosimilars (Cyltezo, Simlandi) required before Humira
+• Step therapy: all preferred biosimilars must be tried before non-preferred agents
+• Renewal: documentation of clinical response required at each authorization period
+
+IL-17/IL-23 Inhibitors (Cosentyx, Skyrizi, Tremfya, Stelara):
+• Moderate-to-severe disease severity (PASI ≥12 for psoriasis, or inadequate DMARD response for PsA)
+• Prior failure of ≥1 conventional therapy
+• Specialist prescriber required
+
+JAK Inhibitors (Rinvoq, Xeljanz):
+• Require prior failure of ≥1 TNF inhibitor for RA and PsA (FDA/Cigna black box requirements)
+• Cardiovascular risk assessment documentation
+• Age ≥18 for most indications
+
+GLP-1 Agonists (Wegovy, Zepbound):
+• BMI ≥30, or BMI ≥27 with ≥1 weight-related comorbidity
+• Enrollment in behavioral modification program required
+• 3-month response assessment for renewal
+
+Sources: Cigna IP0660, IP0319, IP0687, IP0670, IP0692, GLP-1 PA policy.`,
+  },
+  {
+    icon: '📊',
+    title: 'Policy Changes',
+    desc: 'What changed recently?',
+    query: 'What changed in recent policy updates?',
+    hardcodedAnswer: `Recent Policy Changes (2025–2026) from AntonRX database:
+
+Cigna 2025 Formulary Changes:
+• Mounjaro (tirzepatide) and Ozempic (semaglutide) moved to covered tiers with new PA requirements (BMI + comorbidity criteria)
+• Eliquis and Xarelto: PA requirements removed — now covered without prior authorization
+• Descovy (emtricitabine/tenofovir): PA removed for PrEP indication
+• Hyrimoz (adalimumab-adaz) specific NDCs removed from formulary — transition to Cyltezo or Simlandi required
+• Humatrope and Norditropin: removed from formulary — transition to Skytrofa or generic somatropin
+
+UHC 2026 Updates:
+• Leqembi (lecanemab) added: new PA policy effective 2026-04-01 for early Alzheimer's — requires MRI, cognitive scores (MMSE 20–30), amyloid confirmation, and neurologist prescriber
+• Denosumab policy updated: Stoboclo added as preferred biosimilar alongside Prolia; Jubbonti/Wyost are non-preferred requiring step through preferred products
+• Botulinum toxins: Daxxify (daxibotulinumtoxinA) now explicitly excluded/not covered
+
+Aetna 2026 Exclusions:
+• HUMIRA, CIMZIA, ACTEMRA, INFLECTRA: excluded — members must transition to preferred biosimilars
+• GLEEVEC, IMBRUVICA, COPIKTRA: excluded — generic/preferred alternatives required
+• AUBAGIO, GILENYA, COPAXONE: excluded MS therapies — transition to preferred DMTs
+
+Sources: Cigna Rx Changes 2025, UHC 2026D0125E, UHC 2026D0068S, Aetna 2026 Exclusion Drug List.`,
+  },
 ];
 
 export function ChatInterface() {
+  const [mounted, setMounted] = useState(false);
   const [input, setInput] = useState('');
-  const [provider, setProvider] = useState<Provider>('ollama');
+  const [provider, setProvider] = useState<Provider>('gemini');
+
+  useEffect(() => { setMounted(true); }, []);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showProviderMenu, setShowProviderMenu] = useState(false);
+  const [streamingId, setStreamingId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -48,38 +146,54 @@ export function ChatInterface() {
     }
   }, [input]);
 
-  async function handleSend(text?: string) {
+  async function typeAnswer(answerId: string, fullText: string) {
+    const charsPerTick = 2;
+    const delay = 28;
+    // Simulate initial "thinking" pause
+    await new Promise((r) => setTimeout(r, 2000));
+    let i = 0;
+    setStreamingId(answerId);
+    while (i < fullText.length) {
+      const chunk = fullText.slice(0, i + charsPerTick);
+      setMessages((prev) =>
+        prev.map((m) => (m.id === answerId ? { ...m, content: chunk } : m))
+      );
+      i += charsPerTick;
+      // Slightly randomize delay for natural feel
+      const jitter = Math.random() * 20;
+      await new Promise((r) => setTimeout(r, delay + jitter));
+    }
+    setMessages((prev) =>
+      prev.map((m) => (m.id === answerId ? { ...m, content: fullText } : m))
+    );
+    setStreamingId(null);
+  }
+
+  async function handleSend(text?: string, hardcodedAnswer?: string) {
     const msg = (text ?? input).trim();
     if (!msg || isLoading) return;
     setInput('');
 
     const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: msg };
+    const assistantId = crypto.randomUUID();
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
 
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: msg, provider }),
-      });
-      const data = await res.json();
-      const answer = data.answer ?? data.error ?? 'No response from backend.';
-      const sources = data.sources?.length
-        ? `\n\n---\n**Sources:** ${data.sources.map((s: { payer_name: string; filename: string }) => `${s.payer_name} (${s.filename})`).join(', ')}`
-        : '';
-      setMessages((prev) => [
-        ...prev,
-        { id: crypto.randomUUID(), role: 'assistant', content: answer + sources },
-      ]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        { id: crypto.randomUUID(), role: 'assistant', content: 'Failed to reach the backend.' },
-      ]);
-    } finally {
+    if (hardcodedAnswer) {
+      // Show thinking spinner for ~2s then start typing
+      await new Promise((r) => setTimeout(r, 2000));
       setIsLoading(false);
+      setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '' }]);
+      await typeAnswer(assistantId, hardcodedAnswer);
+      return;
     }
+
+    // Live API disabled — hackathon demo period has ended
+    setIsLoading(false);
+    setMessages((prev) => [
+      ...prev,
+      { id: assistantId, role: 'assistant', content: 'The live AI chat API has been disabled since the hackathon demo period has ended. You can still try the pre-built demo questions above to see how the system worked.' },
+    ]);
   }
 
   const hasMessages = messages.length > 0;
@@ -124,7 +238,7 @@ export function ChatInterface() {
                 {SUGGESTIONS.map((s) => (
                   <button
                     key={s.title}
-                    onClick={() => handleSend(s.query)}
+                    onClick={() => handleSend(s.query, s.hardcodedAnswer)}
                     className="group flex flex-col items-start rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#181A20] p-4 text-left transition-all hover:border-[#91BFEB] hover:shadow-md dark:hover:border-[#91BFEB]/60"
                   >
                     <span className="text-xl">{s.icon}</span>
@@ -180,7 +294,7 @@ export function ChatInterface() {
                     className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-white/80 dark:hover:bg-white/5 transition-colors"
                   >
                     <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                    {PROVIDER_LABELS[provider]}
+                    {mounted ? PROVIDER_LABELS[provider] : 'Gemini 2.5'}
                     <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                   </button>
                   {showProviderMenu && (

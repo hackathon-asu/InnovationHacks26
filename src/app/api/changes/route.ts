@@ -7,12 +7,8 @@
 const FASTAPI = process.env.FASTAPI_URL ?? 'http://localhost:8000';
 
 export async function GET() {
-  try {
-    const res = await fetch(`${FASTAPI}/api/v1/ingest/changes`);
-    if (!res.ok) return Response.json({ changes: [] });
-    const data = await res.json();
-    return Response.json({ changes: data });
-  } catch {
-    return Response.json({ changes: [] });
-  }
+  return Response.json(
+    { changes: [], message: 'Changes API has been disabled. The hackathon demo period has ended.' },
+    { status: 403 }
+  );
 }
