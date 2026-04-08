@@ -34,3 +34,4 @@ structlog==24.4.0
 requests==2.32.3            # sync HTTP (used only in non-async helpers)
 beautifulsoup4==4.12.3      # HTML parsing for payer index pages
 lxml==5.2.2                 # fast HTML/XML parser backend for BS4
+anthropic>=0.40.0

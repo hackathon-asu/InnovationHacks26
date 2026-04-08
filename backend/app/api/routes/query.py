@@ -27,7 +27,11 @@ log = get_logger(__name__)
 
 
 @router.post("/ask", response_model=QueryResponse)
-async def ask_question(request: QueryRequest, db: AsyncSession = Depends(get_db)):
+async def ask_question(
+    request: QueryRequest,
+    db: AsyncSession = Depends(get_db),
+    provider: str | None = None,
+):
     """
     Hybrid RAG endpoint — answers natural language questions about drug policies.
 
@@ -37,7 +41,7 @@ async def ask_question(request: QueryRequest, db: AsyncSession = Depends(get_db)
       "What changed across payer policies for adalimumab this quarter?"
     """
     try:
-        return await answer_query(db, request)
+        return await answer_query(db, request, provider=provider)
     except Exception as e:
         log.error("Query failed", error=str(e))
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")

@@ -25,7 +25,7 @@ from typing import Optional
 
 import httpx
 import google.generativeai as genai
-from sqlalchemy import select, and_, func, text
+from sqlalchemy import select, and_, func, text, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -38,6 +38,25 @@ settings = get_settings()
 log = get_logger(__name__)
 
 genai.configure(api_key=settings.gemini_api_key)
+
+# Known drug brand/generic name fragments for extraction
+_DRUG_PATTERN = re.compile(
+    r'\b(humira|adalimumab|rituxan|rituximab|keytruda|pembrolizumab|opdivo|nivolumab|'
+    r'avastin|bevacizumab|herceptin|trastuzumab|enbrel|etanercept|remicade|infliximab|'
+    r'stelara|ustekinumab|skyrizi|risankizumab|tremfya|guselkumab|cosentyx|secukinumab|'
+    r'dupixent|dupilumab|rinvoq|upadacitinib|xeljanz|tofacitinib|ocrevus|ocrelizumab|'
+    r'tysabri|natalizumab|lemtrada|alemtuzumab|zinbryta|daclizumab|kesimpta|ofatumumab|'
+    r'briumvi|ublituximab|leqembi|lecanemab|zolgensma|onasemnogene|spinraza|nusinersen|'
+    r'benlysta|belimumab|xolair|omalizumab|entyvio|vedolizumab|cimzia|certolizumab|'
+    r'adakveo|crizanlizumab|prolia|denosumab|xgeva|botox|dysport|xeomin|myobloc|'
+    r'wegovy|ozempic|semaglutide|mounjaro|zepbound|tirzepatide|saxenda|liraglutide|'
+    r'skytrofa|lonapegsomatropin|amondys|casimersen|tepezza|teprotumumab|'
+    r'kisqali|ibrance|lynparza|imbruvica|tagrisso|xtandi|venclexta|brukinsa|'
+    r'emgality|aimovig|ajovy|qulipta|ubrelvy|nurtec|'
+    r'mavyret|epclusa|harvoni|sovaldi|'
+    r'actemra|tocilizumab|orencia|abatacept|simponi|golimumab)\b',
+    re.IGNORECASE
+)
 
 ANSWER_SYSTEM_PROMPT = """
 You are a medical benefit drug policy analyst. You answer questions about insurance coverage
@@ -161,6 +180,51 @@ async def _structured_lookup(
     return records
 
 
+def _extract_drug_from_question(question: str) -> Optional[str]:
+    """Extract a drug name from the question text using regex."""
+    match = _DRUG_PATTERN.search(question)
+    return match.group(0) if match else None
+
+
+async def _broad_structured_lookup(db: AsyncSession, question: str) -> list[dict]:
+    """Fallback: return a sample of indexed drugs when no specific drug is mentioned."""
+    result = await db.execute(
+        select(
+            Policy.payer_name,
+            Policy.id.label("policy_id"),
+            Policy.filename,
+            Policy.effective_date,
+            DrugCoverage.drug_brand_name,
+            DrugCoverage.drug_generic_name,
+            DrugCoverage.coverage_status,
+            DrugCoverage.prior_auth_required,
+            DrugCoverage.j_code,
+            DrugCoverage.rxcui,
+        )
+        .join(DrugCoverage, DrugCoverage.policy_id == Policy.id)
+        .where(Policy.status == "indexed")
+        .order_by(Policy.payer_name)
+        .limit(20)
+    )
+    rows = result.mappings().all()
+    return [
+        {
+            "payer_name": row["payer_name"],
+            "policy_id": str(row["policy_id"]),
+            "filename": row["filename"],
+            "drug_brand_name": row["drug_brand_name"],
+            "drug_generic_name": row["drug_generic_name"],
+            "coverage_status": row["coverage_status"],
+            "prior_auth_required": row["prior_auth_required"],
+            "j_code": row["j_code"],
+            "rxcui": row["rxcui"],
+            "step_therapy_steps": 0,
+            "effective_date": row["effective_date"],
+        }
+        for row in rows
+    ]
+
+
 async def _vector_search(
     db: AsyncSession,
     question: str,
@@ -247,13 +311,18 @@ def _format_chunk_context(chunks_with_scores: list[tuple[DocumentChunk, float]])
 async def answer_query(
     db: AsyncSession,
     request: QueryRequest,
+    provider: Optional[str] = None,
 ) -> QueryResponse:
     """
     Main entry point for the RAG query pipeline.
     Detects query type, retrieves from both Postgres and pgvector, generates answer.
     """
     query_type = _detect_query_type(request.question)
-    log.info("Processing query", type=query_type, question=request.question[:80])
+    effective_provider = provider or settings.llm_provider
+    log.info("Processing query", type=query_type, provider=effective_provider, question=request.question[:80])
+
+    # Auto-extract drug filter from question if not provided
+    drug_filter = request.drug_filter or _extract_drug_from_question(request.question)
 
     # ── Retrieve ─────────────────────────────────────────────────────────────
     structured_records: list[dict] = []
@@ -261,13 +330,19 @@ async def answer_query(
 
     if query_type in ("structured", "hybrid"):
         structured_records = await _structured_lookup(
-            db, request.question, request.drug_filter, request.payer_filter
+            db, request.question, drug_filter, request.payer_filter
         )
+        # Fallback: if no results and no specific drug, show available data
+        if not structured_records and not drug_filter:
+            structured_records = await _broad_structured_lookup(db, request.question)
 
     if query_type in ("semantic", "hybrid"):
-        chunk_results = await _vector_search(
-            db, request.question, request.payer_filter, request.top_k
-        )
+        try:
+            chunk_results = await _vector_search(
+                db, request.question, request.payer_filter, request.top_k
+            )
+        except Exception as e:
+            log.warning("Vector search unavailable, using structured data only", error=str(e))
 
     # ── Augment prompt ────────────────────────────────────────────────────────
     context_block = "\n\n".join([
@@ -282,7 +357,7 @@ async def answer_query(
 Answer the question based strictly on the context above."""
 
     # ── Generate ──────────────────────────────────────────────────────────────
-    if settings.llm_provider == "ollama":
+    if effective_provider == "ollama":
         async with httpx.AsyncClient(timeout=120.0) as client:
             ollama_response = await client.post(
                 f"{settings.ollama_base_url}/api/chat",
