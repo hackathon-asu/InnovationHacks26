@@ -1,5 +1,5 @@
 # --------0x0x0x0x0x0-----------
-# AntonRX - AI Policy Tracker
+# InsightRX - AI Policy Tracker
 # Written by Abhinav & Neeharika
 # CC BY-NC-SA 4.0
 # Commercial use: chatgpt@asu.edu
@@ -21,7 +21,7 @@ log = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    log.info("Starting AntonRX API", env=settings.environment)
+    log.info("Starting InsightRX API", env=settings.environment)
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     log.info("Upload directory ready", path=str(settings.upload_dir))
     await init_db()
@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="AntonRX API",
+    title="InsightRX API",
     description="Medical benefit drug policy ingestion and RAG query engine",
     version="0.2.0",
     lifespan=lifespan,

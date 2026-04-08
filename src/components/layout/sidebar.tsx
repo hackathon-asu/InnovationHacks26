@@ -1,6 +1,6 @@
 'use client';
 /* --------0x0x0x0x0x0-----------
- * AntonRX - AI Policy Tracker
+ * InsightRX - AI Policy Tracker
  * Written by Abhinav & Neeharika
  * CC BY-NC-SA 4.0
  * Commercial use: chatgpt@asu.edu
@@ -66,7 +66,7 @@ export function Sidebar() {
       <aside className="hidden w-60 shrink-0 border-r border-border bg-card md:block">
         <div className="flex h-14 items-center border-b border-border px-4">
           <Link href="/" className="text-lg font-semibold tracking-tight">
-            Anton <span className="text-primary">RX</span> Track
+            Insight <span className="text-primary">RX</span>
           </Link>
         </div>
         <NavLinks pathname={pathname} />
@@ -95,7 +95,7 @@ export function Sidebar() {
                 onClick={() => setMobileOpen(false)}
                 className="text-lg font-semibold tracking-tight"
               >
-                Anton <span className="text-primary">RX</span> Track
+                Insight <span className="text-primary">RX</span>
               </Link>
               <button
                 onClick={() => setMobileOpen(false)}

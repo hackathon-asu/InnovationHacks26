@@ -1,6 +1,6 @@
 'use client';
 /* --------0x0x0x0x0x0-----------
- * AntonRX - AI Policy Tracker
+ * InsightRX - AI Policy Tracker
  * Written by Abhinav & Neeharika
  * CC BY-NC-SA 4.0
  * Commercial use: chatgpt@asu.edu
@@ -24,7 +24,7 @@ const SUGGESTIONS = [
     title: 'Drug Coverage',
     desc: 'Which plans cover bevacizumab?',
     query: 'Which plans cover bevacizumab?',
-    hardcodedAnswer: `Based on the AntonRX policy database, here is coverage for bevacizumab (Avastin) across payers:
+    hardcodedAnswer: `Based on the InsightRX policy database, here is coverage for bevacizumab (Avastin) across payers:
 
 UnitedHealthcare — Covered with criteria (Policy 2026D0017). Prior authorization required. Covered for colorectal cancer, NSCLC, glioblastoma, cervical cancer, and ovarian cancer. J-code: J9035. Step therapy: biosimilars (Mvasi, Zirabev) preferred over Avastin.
 
@@ -99,7 +99,7 @@ Sources: Cigna IP0660, IP0319, IP0687, IP0670, IP0692, GLP-1 PA policy.`,
     title: 'Policy Changes',
     desc: 'What changed recently?',
     query: 'What changed in recent policy updates?',
-    hardcodedAnswer: `Recent Policy Changes (2025–2026) from AntonRX database:
+    hardcodedAnswer: `Recent Policy Changes (2025–2026) from InsightRX database:
 
 Cigna 2025 Formulary Changes:
 • Mounjaro (tirzepatide) and Ozempic (semaglutide) moved to covered tiers with new PA requirements (BMI + comorbidity criteria)
@@ -206,7 +206,7 @@ export function ChatInterface() {
             <div className="h-7 w-7 rounded-lg bg-[#15173F] dark:bg-[#91BFEB] flex items-center justify-center">
               <span className="text-[10px] font-bold text-white dark:text-[#15173F]">Rx</span>
             </div>
-            <span className="text-sm font-semibold text-slate-800 dark:text-white">AntonRX Policy AI</span>
+            <span className="text-sm font-semibold text-slate-800 dark:text-white">InsightRX Policy AI</span>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -328,7 +328,7 @@ export function ChatInterface() {
               </div>
             </div>
             <p className="mt-2 text-center text-[10px] text-slate-400 dark:text-slate-500">
-              AntonRX AI can make mistakes. Verify drug coverage details with official payer documentation.
+              InsightRX AI can make mistakes. Verify drug coverage details with official payer documentation.
             </p>
           </div>
         </div>

@@ -1,4 +1,4 @@
-# Anton RX Track -- System Architecture
+# InsightRX -- System Architecture
 
 ## Medical Benefit Drug Policy Tracker & Comparison Tool
 
@@ -8,7 +8,7 @@
 
 ## 1. System Overview
 
-Anton RX Track is a **drug coverage tracking and comparison tool**. It ships with a pre-seeded database of real medical policies from major US payers and lets users search drugs, compare coverage across plans, and see what changed between policy versions. Upload and chat are secondary features.
+InsightRX is a **drug coverage tracking and comparison tool**. It ships with a pre-seeded database of real medical policies from major US payers and lets users search drugs, compare coverage across plans, and see what changed between policy versions. Upload and chat are secondary features.
 
 **Architecture**: Dual-stack. A **Python FastAPI backend** handles document ingestion (Docling PDF parsing, NLP pre-extraction, Gemini structured extraction, RxNorm normalization, pgvector embeddings, hybrid RAG). A **Next.js frontend** provides the dashboard, search, comparison matrix, change tracking, and chat UI. Both run on localhost for the demo.
 

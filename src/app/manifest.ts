@@ -1,5 +1,5 @@
 /* --------0x0x0x0x0x0-----------
- * AntonRX - AI Policy Tracker
+ * InsightRX - AI Policy Tracker
  * Written by Abhinav & Neeharika
  * CC BY-NC-SA 4.0
  * Commercial use: chatgpt@asu.edu
@@ -8,8 +8,8 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'AntonRX — AI Policy Tracker',
-    short_name: 'AntonRX',
+    name: 'InsightRX — AI Policy Tracker',
+    short_name: 'InsightRX',
     description: 'Drug coverage tracking and comparison across major US payers with AI-powered extraction.',
     start_url: '/',
     display: 'standalone',

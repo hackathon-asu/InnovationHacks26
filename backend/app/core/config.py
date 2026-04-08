@@ -1,5 +1,5 @@
 # --------0x0x0x0x0x0-----------
-# AntonRX - AI Policy Tracker
+# InsightRX - AI Policy Tracker
 # Written by Abhinav & Neeharika
 # CC BY-NC-SA 4.0
 # Commercial use: chatgpt@asu.edu
@@ -11,7 +11,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    app_name: str = "AntonRX"
+    app_name: str = "InsightRX"
     environment: str = "development"
 
     # LLM provider: "gemini" | "ollama" | "groq" | "nvidia"

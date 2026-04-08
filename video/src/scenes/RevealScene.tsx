@@ -138,7 +138,7 @@ export const RevealScene: React.FC = () => {
                     marginTop: 4,
                   }}
                 >
-                  AntonRX
+                  InsightRX
                 </div>
               </div>
               <div

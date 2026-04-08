@@ -1,4 +1,4 @@
-# AntonRX
+# InsightRX
 
 > AI-powered medical benefit drug policy intelligence.
 >
@@ -8,7 +8,7 @@
   <strong>Next.js 16</strong> • <strong>FastAPI</strong> • <strong>PostgreSQL + pgvector</strong> • <strong>Docling</strong> • <strong>RxNorm</strong> • <strong>Hybrid RAG</strong>
 </p>
 
-AntonRX is a full-stack policy intelligence workspace built for fast-moving healthcare teams that need to understand medical benefit drug policies without manually digging through payer PDFs. The app combines a polished Next.js dashboard with a FastAPI ingestion/query backend that parses policies, normalizes drug identities, indexes chunks for retrieval, and serves comparison and Q&A workflows.
+InsightRX is a full-stack policy intelligence workspace built for fast-moving healthcare teams that need to understand medical benefit drug policies without manually digging through payer PDFs. The app combines a polished Next.js dashboard with a FastAPI ingestion/query backend that parses policies, normalizes drug identities, indexes chunks for retrieval, and serves comparison and Q&A workflows.
 
 Built for Innovation Hacks 2.0 at ASU, the project is tuned for one job: turning messy policy documents into something you can actually work with.
 
@@ -352,7 +352,7 @@ flowchart LR
   RXCLIENT --> RXNORM
 ```
 
-AntonRX is split into two main parts:
+InsightRX is split into two main parts:
 
 - `src/`: Next.js 16 frontend, route handlers, UI, and API proxy layer
 - `backend/`: FastAPI backend for ingestion, retrieval, policy fetchers, and RAG query logic
@@ -528,4 +528,4 @@ Source headers credit:
 
 ## Disclaimer
 
-AntonRX is a policy analysis tool, not medical advice. Always verify coverage decisions against official payer documentation.
+InsightRX is a policy analysis tool, not medical advice. Always verify coverage decisions against official payer documentation.

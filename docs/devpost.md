@@ -1,4 +1,4 @@
-# AntonRX — Devpost Submission
+# InsightRX — Devpost Submission
 
 > Copy-paste sections below into the corresponding Devpost fields.
 
@@ -6,7 +6,7 @@
 
 ## Project Name
 
-AntonRX
+InsightRX
 
 ---
 
@@ -26,7 +26,7 @@ We wanted to build the tool that should already exist: one place where you searc
 
 ## What it does
 
-AntonRX is a full-stack policy intelligence workspace that turns messy payer PDFs into structured, searchable, comparable data.
+InsightRX is a full-stack policy intelligence workspace that turns messy payer PDFs into structured, searchable, comparable data.
 
 **Core features:**
 
@@ -43,7 +43,7 @@ AntonRX is a full-stack policy intelligence workspace that turns messy payer PDF
 
 ## How we built it
 
-AntonRX is a dual-stack application:
+InsightRX is a dual-stack application:
 
 **Frontend — Next.js 16 / React 19 / TypeScript / Tailwind CSS 4**
 - 11 pages: dashboard, drug search, drug detail, policies, policy detail, compare, changes, chat, fetch, upload, API docs
@@ -105,7 +105,7 @@ AntonRX is a dual-stack application:
 
 ---
 
-## What's next for AntonRX
+## What's next for InsightRX
 
 - **More payer adapters** — Extend auto-fetch to Aetna, Humana, BCBS, and Medicaid/Medicare sources.
 - **Automated monitoring** — Scheduled policy re-fetches with alerts when breaking changes are detected.

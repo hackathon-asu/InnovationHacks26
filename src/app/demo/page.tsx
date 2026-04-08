@@ -1,6 +1,6 @@
 'use client';
 /* --------0x0x0x0x0x0-----------
- * AntonRX - AI Policy Tracker
+ * InsightRX - AI Policy Tracker
  * Written by Abhinav & Neeharika
  * CC BY-NC-SA 4.0
  * Commercial use: chatgpt@asu.edu
@@ -289,7 +289,7 @@ export default function DemoPage() {
       </section>
 
       <footer className="py-6 px-6 text-center text-xs text-slate-400 dark:text-slate-600">
-        AntonRX — Innovation Hacks 2.0 @ ASU — April 2026
+        InsightRX — Innovation Hacks 2.0 @ ASU — April 2026
       </footer>
     </div>
   );

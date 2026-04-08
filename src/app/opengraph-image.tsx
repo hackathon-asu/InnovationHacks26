@@ -1,12 +1,12 @@
 /* --------0x0x0x0x0x0-----------
- * AntonRX - AI Policy Tracker
+ * InsightRX - AI Policy Tracker
  * Written by Abhinav & Neeharika
  * CC BY-NC-SA 4.0
  * Commercial use: chatgpt@asu.edu
  * -------------------------------- */
 import { ImageResponse } from 'next/og';
 
-export const alt = 'AntonRX — AI-Powered Drug Policy Tracker';
+export const alt = 'InsightRX — AI-Powered Drug Policy Tracker';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -44,7 +44,7 @@ export default function OGImage() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 28, fontWeight: 700, color: '#FFFFFF', letterSpacing: '-0.02em' }}>
-              ANTONRX
+              INSIGHTRX
             </span>
             <span
               style={{

@@ -1,5 +1,5 @@
 /* --------0x0x0x0x0x0-----------
- * AntonRX - AI Policy Tracker
+ * InsightRX - AI Policy Tracker
  * Written by Abhinav & Neeharika
  * CC BY-NC-SA 4.0
  * Commercial use: chatgpt@asu.edu
@@ -8,7 +8,7 @@ export async function GET() {
   const spec = {
     openapi: '3.1.0',
     info: {
-      title: 'Anton RX Track — Unified API',
+      title: 'InsightRX — Unified API',
       description:
         'Drug coverage tracking and comparison across major US payers.\n\n' +
         '**Architecture**: Next.js frontend (port 3000) + FastAPI backend (port 8000).\n' +

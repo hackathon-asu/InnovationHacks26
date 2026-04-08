@@ -2,7 +2,7 @@
 
 ## Context
 
-You are working on **Anton RX's Track** — a Medical Benefit Drug Policy Tracker for a hackathon. There are two branches with complementary implementations that need to be merged:
+You are working on **InsightRX** — a Medical Benefit Drug Policy Tracker for a hackathon. There are two branches with complementary implementations that need to be merged:
 
 - **`main` branch**: A complete Next.js 16 frontend + TypeScript backend (API routes, Drizzle ORM, AI SDK v6, pdf-parse, RxNorm client). This is the deployment target — it runs the dashboard, search, comparison matrix, chat, and all UI.
 - **`dev` branch**: A Python FastAPI backend with a sophisticated 8-stage ingestion pipeline (Docling PDF parsing, scispaCy/Med7 NLP, Gemini extraction, RxNorm normalization, pgvector embeddings, hybrid RAG). The Python backend has much richer data modeling (hierarchical clinical criteria, step therapy, quantity limits, site-of-care, provider requirements) but currently can't actually run Docling because it's commented out in `requirements.txt` due to dependency conflicts on the wrong Python version.

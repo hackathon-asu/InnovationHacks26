@@ -1,5 +1,5 @@
 /* --------0x0x0x0x0x0-----------
- * AntonRX - AI Policy Tracker
+ * InsightRX - AI Policy Tracker
  * Written by Abhinav & Neeharika
  * CC BY-NC-SA 4.0
  * Commercial use: chatgpt@asu.edu
@@ -184,11 +184,11 @@ export default async function DashboardPage() {
                 <div className="shrink-0 h-8 w-8 rounded-full bg-[#15173F] dark:bg-[#91BFEB] flex items-center justify-center text-white dark:text-[#15173F] text-xs font-bold">AI</div>
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-semibold text-slate-800 dark:text-white">AntonRX AI</span>
+                    <span className="text-sm font-semibold text-slate-800 dark:text-white">InsightRX AI</span>
                     <span className="text-[10px] text-slate-400">just now</span>
                   </div>
                   <div className="rounded-xl bg-[#F0EDE8] dark:bg-white/5 p-3 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                    Welcome to <span className="font-semibold">AntonRX Policy Intelligence</span>. I can answer questions about drug coverage, prior auth criteria, step therapy, and policy differences across payers.
+                    Welcome to <span className="font-semibold">InsightRX Policy Intelligence</span>. I can answer questions about drug coverage, prior auth criteria, step therapy, and policy differences across payers.
                   </div>
                   {/* Suggested questions */}
                   <div className="mt-3 rounded-xl border border-[#91BFEB]/30 bg-[#dceeff]/30 dark:bg-[#91BFEB]/10 p-3">
