@@ -39,8 +39,8 @@ export default function OGImage() {
               border: '2px solid #91BFEB44',
             }}
           >
-            <span style={{ fontSize: 28, fontWeight: 800, color: '#91BFEB' }}>A</span>
-            <span style={{ fontSize: 28, fontWeight: 800, color: '#FFFFFF' }}>Rx</span>
+            <span style={{ fontSize: 28, fontWeight: 800, color: '#91BFEB' }}>I</span>
+            <span style={{ fontSize: 28, fontWeight: 800, color: '#FFFFFF' }}>R</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 28, fontWeight: 700, color: '#FFFFFF', letterSpacing: '-0.02em' }}>

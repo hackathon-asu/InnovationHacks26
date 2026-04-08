@@ -205,7 +205,7 @@ export function ChatInterface() {
         <header className="flex items-center justify-between border-b border-slate-200 dark:border-white/10 bg-white dark:bg-[#181A20] px-6 py-3">
           <div className="flex items-center gap-3">
             <div className="h-7 w-7 rounded-lg bg-[#15173F] dark:bg-[#91BFEB] flex items-center justify-center">
-              <span className="text-[10px] font-bold text-white dark:text-[#15173F]">Rx</span>
+              <span className="text-[10px] font-bold text-white dark:text-[#15173F]">IR</span>
             </div>
             <span className="text-sm font-semibold text-slate-800 dark:text-white">InsightRX Policy AI</span>
           </div>
@@ -225,7 +225,7 @@ export function ChatInterface() {
             <div className="flex flex-col items-center justify-center px-6 py-20">
               {/* Greeting */}
               <div className="mb-2 h-14 w-14 rounded-2xl bg-[#15173F] dark:bg-[#91BFEB] flex items-center justify-center">
-                <span className="text-lg font-bold text-white dark:text-[#15173F]">Rx</span>
+                <span className="text-lg font-bold text-white dark:text-[#15173F]">IR</span>
               </div>
               <h1 className="mt-4 text-2xl font-bold text-[#15173F] dark:text-white font-[var(--font-montserrat)]">
                 How can I help you today?
@@ -255,7 +255,7 @@ export function ChatInterface() {
               {isLoading && (
                 <div className="flex gap-3">
                   <div className="shrink-0 h-8 w-8 rounded-lg bg-[#15173F] dark:bg-[#91BFEB] flex items-center justify-center">
-                    <span className="text-[9px] font-bold text-white dark:text-[#15173F]">Rx</span>
+                    <span className="text-[9px] font-bold text-white dark:text-[#15173F]">IR</span>
                   </div>
                   <div className="rounded-xl bg-white dark:bg-[#181A20] border border-slate-200 dark:border-white/10 p-3 text-sm text-slate-500 dark:text-slate-400 animate-pulse">
                     <div className="flex items-center gap-2">

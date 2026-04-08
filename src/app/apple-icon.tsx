@@ -23,8 +23,8 @@ export default function AppleIcon() {
           borderRadius: 36,
         }}
       >
-        <span style={{ fontSize: 48, fontWeight: 800, color: '#91BFEB' }}>A</span>
-        <span style={{ fontSize: 48, fontWeight: 800, color: '#FFFFFF' }}>Rx</span>
+        <span style={{ fontSize: 48, fontWeight: 800, color: '#91BFEB' }}>I</span>
+        <span style={{ fontSize: 48, fontWeight: 800, color: '#FFFFFF' }}>R</span>
       </div>
     ),
     { ...size }
