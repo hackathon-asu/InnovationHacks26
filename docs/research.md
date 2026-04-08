@@ -1,31 +1,55 @@
 # Technical Research: AI-Powered Medical Policy Document Parser and Comparison System
 
+> **Last updated:** April 7, 2026
+
 ## 1. Document Ingestion
 
 ### 1.1 PDF Parsing Tools (Ranked by Suitability)
 
-**Docling (Recommended Primary)**
+**Docling v2.85.0 (Recommended Primary)** — *~57,200 GitHub stars*
 - Open-source framework by IBM for converting unstructured documents to structured formats
-- Supports PDF, DOCX, PPTX, XLSX, HTML, images, and more
-- Uses DocLayNet for layout analysis and TableFormer for table structure recognition
+- Supports PDF, DOCX, PPTX, XLSX, HTML, Markdown, LaTeX, AsciiDoc, CSV, XBRL, images, and audio/video (via Whisper)
+- Uses DocLayNet for layout analysis and **TableFormer v2** (released v2.78.0) for table structure recognition
 - 97.9% accuracy on complex table extraction in 2025 benchmarks
-- Exports to Markdown, HTML, JSON, DocTags
+- Exports to Markdown, HTML, JSON, DocTags, WebVTT
+- **New since mid-2025:**
+  - Pluggable VLM runtime with preset-based configuration (API, vLLM with CUDA graph mode, MLX on Apple Silicon)
+  - New OCR engines: Falcon-OCR, LightOnOCR-2-1B, GLM OCR, KServe v2 remote OCR with gRPC
+  - Headless browser HTML backend via Playwright for JavaScript-rendered pages (v2.82.0)
+  - XBRL parser for financial instance reports with fact metadata and linkbase relationships
+  - LaTeX (.tex) document parsing support
+  - Unified inference engine abstraction (HF Transformers, ONNX Runtime, KServe v2)
+  - Upgraded to transformers v5 and docling-parse v5 (significant parser rewrite)
+  - DocumentFigureClassifier v2.5
+  - Configurable ONNX Runtime graph optimization
+- Integrations: LangChain, LlamaIndex, OpenAI-compatible VLM APIs
+- License: MIT
 - GitHub: https://github.com/docling-project/docling
 - Website: https://www.docling.ai/
 
-**Marker (Datalab)**
+**Marker v1.10.2 (Datalab)** — *~33,500 GitHub stars*
 - Full end-to-end OCR pipeline converting PDFs to Markdown/JSON/HTML
-- Built on Surya OCR engine with support for 90+ languages
+- Built on Surya OCR engine v0.17.1 with support for 90+ languages
 - Good at layout detection and reading order determination
 - Can optionally use an LLM to improve accuracy
-- Requires Python 3.10-3.12
+- **New since mid-2025:**
+  - v1.10.0: New layout model via Surya with major performance boost; `--html_tables_in_markdown` flag
+  - v1.9.0: Block-mode inference — OCR at block level instead of line level (slower but significantly more accurate)
+  - v1.8.3: New OCR model with better math recognition; improved accuracy-first heuristics
+  - Surya v0.16.x: Multi-token inference, speed improvements, configurable attention method, SDPA fixes
+- License: **GPL-3.0-or-later** (note: restrictive for commercial use)
 - GitHub: https://github.com/datalab-to/marker
 
-**Unstructured.io**
+**Unstructured.io v0.22.16** — *~14,400 GitHub stars*
 - Applies OCR and Transformer-based NLP models for text and table extraction
 - Unified API across PDFs, DOCX, HTML, and images
-- Slower than alternatives (51s for 1 page in benchmarks)
-- Good for pipelines needing a single API across many formats
+- **New since mid-2025:**
+  - v0.22.16: Formula markdown export with configurable styles (auto, display_math, plain), Unicode-to-LaTeX normalization
+  - v0.22.14: Deduplicated PDF rendering — 97% peak memory reduction on large PDFs
+  - v0.21.0: **Replaced NLTK with spaCy** to remediate CVE-2025-14009 (CVSS 10.0 RCE via NLTK's zipfile.extractall)
+  - Active release cadence: 10+ releases in Feb–Apr 2026
+- Enterprise "Platform" product available separately for production-grade ETL (partitioning, enrichments, chunking, embedding)
+- License: Apache-2.0 (open-source library)
 - Website: https://unstructured.io/
 
 **Apache Tika**
@@ -40,14 +64,27 @@
 - Built-in prompt injection protection (relevant for LLM pipelines)
 - GitHub: https://github.com/opendataloader-project/opendataloader-pdf
 
+### 1.1.1 Document Parser Comparison Matrix (2026)
+
+| Feature | Docling v2.85 | Marker v1.10 | Unstructured v0.22 |
+|---|---|---|---|
+| **Stars** | ~57.2k | ~33.5k | ~14.4k |
+| **Formats** | PDF, DOCX, PPTX, XLSX, HTML, MD, LaTeX, CSV, XBRL, images, audio/video | PDF (primary) | PDF, DOCX, HTML, images, many more |
+| **OCR engines** | RapidOCR, EasyOCR, Tesseract, OcrMac, Falcon-OCR, LightOnOCR, GLM OCR, KServe remote | Surya v0.17.1 (custom) | Internal via unstructured-inference |
+| **VLM support** | Yes (API, vLLM, MLX, preset system) | No | Via platform product |
+| **Table extraction** | TableFormer v2 (best-in-class) | Surya table recognition | Basic |
+| **License** | MIT | GPL-3.0 | Apache-2.0 |
+| **Key strength** | Broadest format support, modular engine system | Best pure PDF-to-markdown quality | Enterprise ETL pipeline, connector ecosystem |
+
 ### 1.2 OCR Considerations for Medical Policies
 
 Medical policy documents present specific challenges:
 - **Multi-column layouts**: Common in payer policy bulletins; Docling and Marker handle these well
-- **Embedded tables**: Drug lists, HCPCS code tables, ICD-10 criteria tables are critical; TableFormer (Docling) is best-in-class
+- **Embedded tables**: Drug lists, HCPCS code tables, ICD-10 criteria tables are critical; TableFormer v2 (Docling) is best-in-class
 - **Headers/footers/page numbers**: Must be stripped to avoid contaminating parsed content
-- **Scanned PDFs vs. digital PDFs**: Many older policies are scanned; OCR quality varies. Surya (used by Marker) handles this well
+- **Scanned PDFs vs. digital PDFs**: Many older policies are scanned; OCR quality varies. Surya v0.17.1 (used by Marker) handles this well; Docling now offers 6+ OCR engine options
 - **Watermarks and logos**: Can interfere with OCR; preprocessing may be needed
+- **Math/formulas**: Marker v1.8.3+ has improved math recognition; Unstructured v0.22.16 added formula markdown export
 
 ### 1.3 Section Parsing Strategy
 
@@ -73,9 +110,9 @@ Recommended approach: Use Docling/Marker to extract structured sections, then ap
 ### 1.4 HTML Ingestion
 
 Many payers publish policies as HTML pages. Strategies:
-- Use Playwright/Puppeteer for JavaScript-rendered pages
+- **Docling v2.82.0+**: Headless browser HTML backend via Playwright for JavaScript-rendered pages (recommended)
+- Use Playwright/Puppeteer for JavaScript-rendered pages (standalone)
 - BeautifulSoup/lxml for static HTML
-- Docling also supports HTML input natively
 - Watch for session-gated content requiring authentication
 
 ---
@@ -101,40 +138,54 @@ Many payers publish policies as HTML pages. Strategies:
 
 ### 2.2 Healthcare NLP Libraries
 
-**MedSpaCy** (Recommended for rule-based + ML hybrid)
-- Clinical NLP built on spaCy
-- Section detection and segmentation for clinical documents
-- Context detection (negation, uncertainty, family history)
-- Target matching with custom rules
+**MedSpaCy v1.x (Recommended for rule-based + ML hybrid)**
+- Clinical NLP built on spaCy 3.x
+- Key components: `ConTextComponent` (negation/experiencer/temporality detection), `Sectionizer`, `TargetMatcher`, `QuickUMLS` integration, `Postprocessor`
+- Updated ConText algorithm for better negation, experiencer, and temporality detection
+- Growing adoption in VA and academic medical center NLP pipelines
+- Maintained by University of Utah / VA Salt Lake City
 - GitHub: https://github.com/medspacy/medspacy
 
-**scispaCy** (Recommended for biomedical NER)
-- spaCy models for biomedical/clinical text
-- Pre-trained models: en_core_sci_sm, en_core_sci_lg, en_ner_bc5cdr_md (drugs + diseases)
-- Entity linking to UMLS, MeSH, RxNorm, GO, HPO
+**scispaCy v0.5.4 (Recommended for biomedical NER)**
+- spaCy 3.x models for biomedical/clinical text; integrates with HuggingFace transformers
+- Pre-trained models: `en_core_sci_sm`, `en_core_sci_md`, `en_core_sci_lg`, `en_core_sci_scibert`, `en_ner_bc5cdr_md` (drugs + diseases), `en_ner_craft_md`, `en_ner_jnlpba_md`, `en_ner_bionlp13cg_md`
+- Entity linking to UMLS, MeSH, RxNorm, Gene Ontology, HPO
 - F1 score ~85.53 on biomedical NER benchmarks
+- Maintained by Allen Institute for AI (AI2); development pace slowed — incremental compatibility fixes only
 - Website: https://allenai.github.io/scispacy/
 
-**Med7** (Specialized for medication extraction)
+**Med7 (Specialized for medication extraction)**
 - Dedicated NER for 7 medication concepts: dosage, drug name, duration, form, frequency, route, strength
-- Built on spaCy
-- Good for extracting quantity limits and dosing details
+- Built on spaCy; community forks exist for spaCy v3 compatibility
+- No official major version bump; original paper (Kormilitzin et al.) remains primary reference
+- Good for extracting quantity limits and dosing details; largely absorbed by MedSpaCy use cases
 
-**BioBERT / PubMedBERT** (Best accuracy for NER)
-- BioBERT achieves F1 87.83 on biomedical NER (outperforms scispaCy's 85.53)
-- PubMedBERT fine-tuned for embeddings achieves 95.62% Pearson correlation on medical benchmarks
-- Best for entity extraction when accuracy is critical
+**BioBERT / PubMedBERT (Best accuracy for BERT-scale NER)**
+- BioBERT v1.1 achieves F1 87.83 on biomedical NER (outperforms scispaCy's 85.53)
+- PubMedBERT (`microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext`) — state-of-the-art on BLURB benchmarks
+- Still dominates for NER, relation extraction, and classification where BERT-scale efficiency matters
+- **Trend (2025–2026):** Community shifting toward fine-tuning larger open LLMs (7B–70B) for biomedical tasks; BERT-scale models remain relevant for latency-sensitive classification/NER
 
-**John Snow Labs Spark NLP for Healthcare** (Enterprise option)
-- Clinical NER, de-identification, assertion detection
-- Pre-trained models for drug extraction, diagnosis coding
-- Requires commercial license for healthcare models
+**Newer large-scale clinical/biomedical models:**
+- **GatorTron** (UF/NVIDIA): 8.9B parameters trained on 90B+ words of clinical text — positioned as ClinicalBERT's successor
+- **GatorTronGPT**: Generative variant for clinical text generation
+- **BioMistral**: Mistral fine-tune for biomedical text
+- **Me-LLaMA**: Medical LLaMA fine-tune for clinical tasks
+- **BioGPT** (Microsoft): GPT-style biomedical generative model
+- **BioMedLM** (Stanford CRFM): 2.7B parameter model trained on PubMed
+- General frontier LLMs (Gemini 2.5, Claude 4, Llama 3.3) typically outperform specialized models on extraction tasks with good prompts
 
-**Amazon Comprehend Medical** (Cloud option)
-- HIPAA-eligible
-- Extracts medications, conditions, tests, procedures from clinical text
-- Returns structured JSON with entity types and confidence scores
-- Supports RxNorm and ICD-10-CM entity linking
+**John Snow Labs Spark NLP for Healthcare v5.x (Enterprise option)**
+- 700+ pre-trained clinical models and pipelines
+- Clinical NER (100+ entity types), assertion detection, de-identification (HIPAA), relation extraction, clinical summarization, ICD-10/CPT/SNOMED coding
+- New: Generative AI healthcare modules, medical document understanding, zero-shot clinical NER, RAG pipelines
+- Requires commercial license (annual subscription; free for certain research)
+
+**Amazon Comprehend Medical (Cloud option)**
+- HIPAA-eligible; extracts medications, conditions, tests, procedures from clinical text
+- Supports **ICD-10-CM**, **RxNorm**, and **SNOMED CT** entity linking
+- Pricing: per-character for `DetectEntities`, `InferICD10CM`, `InferRxNorm`, `InferSNOMEDCT`
+- Stable but not rapidly evolving; AWS investing more in HealthLake and Bedrock for healthcare generative AI
 
 ### 2.3 Recommended NLP Pipeline
 
@@ -142,7 +193,7 @@ Many payers publish policies as HTML pages. Strategies:
 Input Document (PDF/HTML)
     |
     v
-[Docling/Marker] --> Structured Markdown/JSON with sections
+[Docling v2.85 / Marker v1.10] --> Structured Markdown/JSON with sections
     |
     v
 [Section Classifier] --> Identify: Criteria, Codes, Requirements
@@ -155,7 +206,7 @@ Input Document (PDF/HTML)
     |
     v
 [LLM Structured Output] --> Extract: complex criteria, step therapy logic, relationships
-    |
+    |          (Gemini 2.5 Pro/Flash or Claude Sonnet 4 via AI SDK)
     v
 [RxNorm/UMLS Linker] --> Normalize entities to standard codes
     |
@@ -174,7 +225,11 @@ Structured Policy Object (JSON)
 - Core identifier: RxCUI (unique integer per concept)
 - Concept types: Ingredient, Brand Name, Clinical Drug, Dose Form
 - Example: "Fluoxetine 4 MG/ML Oral Solution" decomposes to ingredient + strength + dose form
-- **API**: RxNav (https://lhncbc.nlm.nih.gov/RxNav/) - free, no license required
+- **Monthly releases** continue (first Monday of each month)
+- **API update (2025–2026):** NLM transitioned to unified UMLS API authentication — **all calls now require a UMLS API key** (unauthenticated access deprecated)
+- **RxNav** web applications still available but NLM signaled potential sunsetting of some legacy REST endpoints
+- Focus on stability and FHIR Terminology Service compatibility
+- **API**: RxNav (https://lhncbc.nlm.nih.gov/RxNav/) — free, requires UMLS API key
 - **Key API endpoints**:
   - `/REST/rxcui.json?name={drugName}` - get RxCUI from drug name
   - `/REST/rxcui/{rxcui}/allrelated.json` - get all related concepts
@@ -204,7 +259,15 @@ Structured Policy Object (JSON)
 - Maps to ICD-10 via NLM's mapping project (updated March/September)
 - I-MAGIC tool for interactive SNOMED-to-ICD-10 mapping
 
-### 3.5 Cross-System Mapping Strategy
+### 3.5 UMLS (2025AA)
+
+- **UMLS 2025AA** is the latest annual release (typically May each year; 2024AB was the fall 2024 release)
+- Contains 200+ source vocabularies including SNOMED CT, ICD-10, RxNorm, LOINC, CPT, MeSH
+- NLM requires a UMLS license (free, requires sign-up and agreement)
+- **UMLS REST API** is the standard access method; Metathesaurus Browser still available
+- NLM modernizing infrastructure with cloud-based access improvements
+
+### 3.6 Cross-System Mapping Strategy
 
 ```
 Drug in Policy Text
@@ -239,7 +302,7 @@ Drug in Policy Text
 
 ### 4.1 Structured Output with AI SDK
 
-Using the Vercel AI SDK with structured output (Zod schemas) for extraction:
+Using the Vercel AI SDK v4.x with structured output (Zod schemas) for extraction:
 
 ```typescript
 import { generateObject } from 'ai';
@@ -296,7 +359,7 @@ const MedicalPolicySchema = z.object({
 });
 
 const result = await generateObject({
-  model: gateway('anthropic/claude-sonnet-4-5'),
+  model: google('gemini-2.5-pro'),  // or anthropic('claude-sonnet-4-5')
   schema: MedicalPolicySchema,
   prompt: `Extract structured policy data from this medical policy document.
            Be precise with codes and criteria. If information is not present,
@@ -307,7 +370,20 @@ const result = await generateObject({
 });
 ```
 
-### 4.2 Prompt Engineering for Medical Documents
+### 4.2 LLM Model Selection for Medical Extraction (2026)
+
+| Model | Strengths | Structured Output | Cost | Best For |
+|---|---|---|---|---|
+| **Gemini 2.5 Pro** | Strong reasoning, "thinking" mode, native JSON schema | Native via `response_schema` | Medium | Complex criteria extraction, multi-page policies |
+| **Gemini 2.5 Flash** | Fast, controllable thinking budget | Native via `response_schema` | Low | High-volume extraction, simple policies |
+| **Claude Sonnet 4** | Excellent instruction following, nuanced text | Via tool use | Medium | Step therapy logic, ambiguous criteria |
+| **Claude Opus 4** | Strongest reasoning (Anthropic) | Via tool use | High | Audit-grade extraction, complex edge cases |
+| **Llama 3.3 70B** | Open weights, 128K context | Via constrained decoding | Self-hosted | On-premise / air-gapped deployments |
+| **Llama 4 Scout** | 10M context, MoE (17B active) | Via constrained decoding | Self-hosted | Very long documents |
+| **DeepSeek-R1** | Strong reasoning, open weights | JSON mode | Self-hosted | Cost-sensitive reasoning tasks |
+| **Mistral Small 3 (24B)** | Apache 2.0, good structured output | JSON mode | Self-hosted | Budget-conscious deployments |
+
+### 4.3 Prompt Engineering for Medical Documents
 
 Key prompt engineering strategies:
 
@@ -329,13 +405,13 @@ Finally, note any site-of-care or provider specialty requirements.
 4. Extract codes from applicable codes section
 5. Merge results into final structured object
 
-### 4.3 RAG Architecture for Policy Q&A
+### 4.4 RAG Architecture for Policy Q&A
 
 ```
 User Query: "Does Aetna cover Keytruda for breast cancer?"
     |
     v
-[Query Embedding] --> PubMedBERT or text-embedding-3-large
+[Query Embedding] --> text-embedding-004 or NV-Embed-v2
     |
     v
 [Vector Search] --> Find top-k relevant policy chunks
@@ -355,13 +431,28 @@ Structured Answer:
   - Source: Aetna Policy #0845, effective 01/2026
 ```
 
-**Vector database options**:
-- **pgvector** (PostgreSQL extension): Good for moderate scale, SQL integration
-- **Pinecone**: Managed, scales well, metadata filtering
-- **Weaviate**: Open-source, hybrid search (vector + keyword)
-- **Chroma**: Lightweight, good for prototyping
+**Vector database options (2026 landscape)**:
 
-**Embedding model recommendation**: PubMedBERT base embeddings (768-dim) for domain-specific accuracy, or OpenAI text-embedding-3-large (3072-dim) for general capability. PubMedBERT outperforms general models on medical text similarity (95.62% vs 93.46% for MiniLM).
+| DB | Version | Key Features | Best For |
+|---|---|---|---|
+| **pgvector** | v0.8.0 | IVFFlat + HNSW indexes, halfvec quantization, parallel HNSW builds, hamming/jaccard for binary vectors | SQL integration, moderate scale |
+| **Pinecone** | Serverless | Pay-per-query pricing, built-in inference/embedding endpoint, integrated reranking, sparse-dense hybrid search | Managed, bursty workloads |
+| **Weaviate** | v1.28.x | Named vectors (multiple per object), multi-tenancy (hot/cold/frozen), BQ/PQ/SQ quantization, Raft-based replication | Complex multi-vector schemas |
+| **Chroma** | v0.6.x | Chroma Cloud (hosted), Rust backend rewrite, auth + multi-tenancy | Prototyping, simple RAG |
+
+**Embedding model recommendations (2026)**:
+
+| Model | Dimensions | Medical Accuracy | Speed | Notes |
+|---|---|---|---|---|
+| **MedCPT** (NCBI) | 768 | Excellent (medical retrieval) | Fast | Best specialized medical retrieval model |
+| **PubMedBERT Embeddings** | 768 | 95.62% Pearson | Fast | Best for medical domain NER/similarity |
+| **NV-Embed-v2** (NVIDIA) | ~4096 | Strong (MTEB SOTA) | Medium | ~7B params, state-of-the-art general |
+| **BGE-M3** (BAAI) | 1024 | Strong | Fast | Multi-lingual, dense+sparse+ColBERT |
+| **GTE-Qwen2** (Alibaba) | Variable | Strong | Fast | Competitive with OpenAI |
+| **text-embedding-004** (Google) | 768 | Good (general) | Fast | 2048 token input, via Gemini API |
+| **text-embedding-3-large** (OpenAI) | 3072 | Good (general) | Fast | Matryoshka dimension reduction |
+| **SapBERT** | 768 | Excellent for entity linking | Medium | UMLS concept matching |
+| **Nomic Embed** | Variable | Good | Fast | Open-source, 8192 token context |
 
 ---
 
@@ -506,19 +597,21 @@ CREATE TABLE policy_chunks (
     chunk_index INTEGER NOT NULL,
     chunk_text TEXT NOT NULL,
     section_type TEXT,            -- "criteria", "codes", "background"
-    embedding vector(768),       -- PubMedBERT dimension
+    embedding vector(768),       -- MedCPT or PubMedBERT dimension
     metadata JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Create indexes
 CREATE INDEX idx_policy_chunks_embedding ON policy_chunks
-    USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+    USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64);
 CREATE INDEX idx_drug_coverages_rxcui ON drug_coverages(rxcui);
 CREATE INDEX idx_drug_coverages_jcode ON drug_coverages(j_code);
 CREATE INDEX idx_criteria_icd_codes ON criteria_icd_codes(icd10_code);
 CREATE INDEX idx_policies_payer ON policies(payer_id, status);
 ```
+
+> **Note (2026 update):** Index type changed from IVFFlat to **HNSW** based on pgvector 0.8.0 improvements — HNSW provides better recall without requiring training and supports parallel index builds. The `halfvec` type can be used for scalar quantization to reduce memory footprint.
 
 ### 5.2 TypeScript Interface (Application Layer)
 
@@ -570,16 +663,18 @@ type CriterionType =
 
 ### 5.3 Alignment with FHIR Standards
 
-The data model should align with FHIR resources for interoperability:
+The data model should align with FHIR R4 (4.0.1) resources for interoperability (R5 published but adoption is early):
 - **CoverageEligibilityResponse**: Maps to `drug_coverages` table; includes `authorizationRequired`, `authorizationSupporting`, and benefit details
 - **ServiceRequest**: Maps prior authorization requests
 - **Claim/ClaimResponse**: Maps coverage determination outcomes
 - **DocumentReference**: Links to source policy documents
 
-CMS rule CMS-0057-F mandates FHIR-based prior authorization APIs, making FHIR alignment important for future integration. Key FHIR implementation guides:
-- Coverage Requirements Discovery (CRD)
-- Documentation Templates and Rules (DTR)
-- Prior Authorization Support (PAS)
+**Da Vinci Implementation Guides (critical for CMS compliance):**
+- **Prior Authorization Support (PAS)** STU 2.0.1: Defines `$submit` operation using FHIR `Claim`/`ClaimResponse` with X12 278 mapping
+- **Coverage Requirements Discovery (CRD)**: CDS Hooks-based; alerts providers at point of care about PA requirements
+- **Documentation Templates and Rules (DTR)**: Automates documentation requirements
+
+CMS rule **CMS-0057-F** mandates FHIR-based prior authorization APIs (see Section 9 for compliance timeline).
 
 ### 5.4 Clinical Quality Language (CQL) for Criteria
 
@@ -620,7 +715,7 @@ CQL engines exist as open-source implementations (https://github.com/cqframework
 [Hash Comparison] --> Compare SHA-256 of new document vs stored hash
     |                   (If unchanged, skip processing)
     v
-[Document Parser] --> Extract structured text via Docling
+[Document Parser] --> Extract structured text via Docling v2.85
     |
     v
 [Section Alignment] --> Match sections between versions using
@@ -686,20 +781,23 @@ interface PolicyChange {
 
 ### 7.1 Vector Embeddings for Semantic Search
 
-**Recommended embedding models**:
+**Recommended embedding models (2026)**:
 
 | Model | Dimensions | Medical Accuracy | Speed | Use Case |
 |---|---|---|---|---|
-| PubMedBERT Embeddings | 768 | 95.62% Pearson | Fast | Best for medical domain |
-| text-embedding-3-large | 3072 | Good (general) | Fast | Broadest coverage |
+| MedCPT (NCBI) | 768 | Excellent (medical IR) | Fast | Best for medical document retrieval |
+| PubMedBERT Embeddings | 768 | 95.62% Pearson | Fast | Medical domain similarity |
+| NV-Embed-v2 (NVIDIA) | ~4096 | MTEB SOTA | Medium | Highest general accuracy |
+| BGE-M3 (BAAI) | 1024 | Strong | Fast | Multi-lingual, hybrid dense+sparse |
+| text-embedding-004 (Google) | 768 | Good (general) | Fast | Via Gemini API |
+| text-embedding-3-large (OpenAI) | 3072 | Good (general) | Fast | Matryoshka dimension reduction |
 | SapBERT | 768 | Excellent for entity linking | Medium | Terminology matching |
-| BioSentVec | 700 | Good | Fast | Sentence-level similarity |
 
 **Chunking strategy for policies**:
 - Chunk by section (criteria, codes, background)
 - Keep drug name + payer as metadata on every chunk
 - Overlap chunks by 100-200 tokens for context continuity
-- Maximum chunk size: 512 tokens for PubMedBERT, 8191 for OpenAI
+- Maximum chunk size: 512 tokens for PubMedBERT/MedCPT, 2048 for Google, 8191 for OpenAI
 
 ### 7.2 Comparison Matrix Architecture
 
@@ -763,32 +861,32 @@ Architecture for answering questions like "Which payers cover Keytruda for NSCLC
 
 ### 8.1 Healthcare NLP Libraries
 
-| Tool | Language | Focus | License |
-|---|---|---|---|
-| [MedSpaCy](https://github.com/medspacy/medspacy) | Python | Clinical NLP (sections, context, NER) | MIT |
-| [scispaCy](https://allenai.github.io/scispacy/) | Python | Biomedical NER, entity linking | MIT |
-| [Med7](https://github.com/kormilitzin/med7) | Python | Medication entity extraction | MIT |
-| [OHNLP/MedTagger](https://github.com/OHNLP) | Java | Clinical NLP on Apache UIMA | Apache 2.0 |
-| [MedaCy](https://github.com/NLPatVCU/medaCy) | Python | Medical text mining | ? |
-| [Stanza (Stanford)](https://stanfordnlp.github.io/stanza/) | Python | Biomedical/clinical NER | Apache 2.0 |
-| [BioBERT](https://github.com/dmis-lab/biobert) | Python | Biomedical language model | Apache 2.0 |
-| [ClinicalBERT](https://huggingface.co/emilyalsentzer/Bio_ClinicalBERT) | Python | Clinical note understanding | MIT |
+| Tool | Language | Focus | License | Status (2026) |
+|---|---|---|---|---|
+| [MedSpaCy](https://github.com/medspacy/medspacy) | Python | Clinical NLP (sections, context, NER) | MIT | Active (v1.x) |
+| [scispaCy](https://allenai.github.io/scispacy/) | Python | Biomedical NER, entity linking | MIT | Maintenance (v0.5.4) |
+| [Med7](https://github.com/kormilitzin/med7) | Python | Medication entity extraction | MIT | Stable, limited updates |
+| [OHNLP/MedTagger](https://github.com/OHNLP) | Java | Clinical NLP on Apache UIMA | Apache 2.0 | Active |
+| [Stanza (Stanford)](https://stanfordnlp.github.io/stanza/) | Python | Biomedical/clinical NER | Apache 2.0 | Active |
+| [BioBERT](https://github.com/dmis-lab/biobert) | Python | Biomedical language model | Apache 2.0 | Stable (v1.1) |
+| [ClinicalBERT](https://huggingface.co/emilyalsentzer/Bio_ClinicalBERT) | Python | Clinical note understanding | MIT | Superseded by GatorTron |
+| [GatorTron](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/clara/models/gatortron_og) | Python | Large-scale clinical LM (8.9B) | Custom | Active |
 
 ### 8.2 Document Processing
 
 | Tool | Focus | Stars | Notes |
 |---|---|---|---|
-| [Docling](https://github.com/docling-project/docling) | PDF/document parsing | 20k+ | Best table extraction |
-| [Marker](https://github.com/datalab-to/marker) | PDF to Markdown/JSON | 20k+ | Best OCR pipeline |
-| [Unstructured](https://github.com/Unstructured-IO/unstructured) | Multi-format parsing | 10k+ | Unified API |
-| [Surya](https://github.com/datalab-to/surya) | OCR engine (90+ langs) | 15k+ | Powers Marker |
+| [Docling](https://github.com/docling-project/docling) | PDF/document parsing | 57k+ | Best table extraction, broadest format support, VLM support |
+| [Marker](https://github.com/datalab-to/marker) | PDF to Markdown/JSON | 33k+ | Best pure PDF-to-markdown quality, block-mode OCR |
+| [Unstructured](https://github.com/Unstructured-IO/unstructured) | Multi-format parsing | 14k+ | Unified API, NLTK→spaCy migration (CVE fix) |
+| [Surya](https://github.com/datalab-to/surya) | OCR engine (90+ langs) | 19k+ | Powers Marker, multi-token inference |
 
 ### 8.3 Medical Coding and Terminology
 
 | Resource | Access | Description |
 |---|---|---|
-| [RxNav API](https://lhncbc.nlm.nih.gov/RxNav/) | Free | Drug name normalization, RxCUI lookup |
-| [UMLS](https://www.nlm.nih.gov/research/umls/) | Free (license) | Unified terminology (ICD, SNOMED, RxNorm, LOINC) |
+| [RxNav API](https://lhncbc.nlm.nih.gov/RxNav/) | Free (UMLS API key required) | Drug name normalization, RxCUI lookup |
+| [UMLS](https://www.nlm.nih.gov/research/umls/) | Free (license required) | Unified terminology (ICD, SNOMED, RxNorm, LOINC) — 2025AA release |
 | [I-MAGIC](https://imagic.nlm.nih.gov/) | Free | Interactive SNOMED-to-ICD-10 mapping |
 | [Tuva Project](https://thetuvaproject.com/) | Open source | Healthcare data infrastructure, SNOMED-ICD-10 map |
 | [CQL Engine](https://github.com/cqframework/clinical_quality_language) | Open source | Clinical criteria execution engine |
@@ -812,12 +910,39 @@ Architecture for answering questions like "Which payers cover Keytruda for NSCLC
 | Availity AuthAI | CQL + AI for policy-aligned PA recommendations |
 | Agadia CriteriaBuilder | Transforms policy PDFs into structured decision trees |
 | Myndshft | GenAI for medical/pharmacy prior authorization |
-| John Snow Labs | Enterprise clinical NLP with pre-trained healthcare models |
-| Amazon Comprehend Medical | HIPAA-eligible cloud NER for medical text |
+| John Snow Labs v5.x | Enterprise clinical NLP with 700+ pre-trained healthcare models |
+| Amazon Comprehend Medical | HIPAA-eligible cloud NER for medical text (stable, limited new investment) |
 
 ---
 
-## 9. Recommended Architecture Summary
+## 9. CMS Interoperability & Regulatory Landscape (2026)
+
+### 9.1 CMS-0057-F: Prior Authorization Interoperability Final Rule
+
+Published January 2024. Affects Medicare Advantage, Medicaid, CHIP, QHP issuers on FFE.
+
+**Milestones:**
+
+| Deadline | Requirement | Status (Apr 2026) |
+|---|---|---|
+| **January 1, 2026** | Prior Authorization API (FHIR-based, Da Vinci PAS IG) | **In effect** — payers should have live APIs |
+| **January 1, 2026** | Provider Directory API updates | **In effect** |
+| **January 1, 2026** | Decision timeframes: 72h urgent, 7 calendar days standard | **In effect** |
+| **January 1, 2026** | Reason for denial with specific code required | **In effect** |
+| **January 1, 2027** | Prior Authorization Metrics reporting (approval/denial rates, time-to-decision, appeal overturn rates — publicly reported) | Upcoming |
+| **January 1, 2027** | Electronic Prior Auth for drugs (Part D) | Upcoming |
+
+> **Note:** Real-world compliance may be uneven. Building systems that can consume FHIR-based PA APIs provides a competitive advantage for integration.
+
+### 9.2 Related CMS Rules
+
+- **CMS-9115-F** (original interoperability rule, 2020): Patient Access API requirements remain in effect
+- Payers must send prior auth decisions as structured FHIR data
+- All FHIR APIs must use Da Vinci implementation guides
+
+---
+
+## 10. Recommended Architecture Summary
 
 ```
                     +-------------------+
@@ -827,8 +952,9 @@ Architecture for answering questions like "Which payers cover Keytruda for NSCLC
                              |
                     +--------v----------+
                     |  Ingestion Layer  |
-                    |  Docling + Marker |
-                    |  + Web Scrapers   |
+                    | Docling v2.85 +   |
+                    | Marker v1.10 +    |
+                    | Playwright scraper|
                     +--------+----------+
                              |
                     +--------v----------+
@@ -841,6 +967,7 @@ Architecture for answering questions like "Which payers cover Keytruda for NSCLC
                     +--------v----------+
                     |  Normalization    |
                     |  RxNorm + UMLS    |
+                    |  (API key req'd)  |
                     |  + HCPCS/ICD-10   |
                     +--------+----------+
                              |
@@ -848,9 +975,9 @@ Architecture for answering questions like "Which payers cover Keytruda for NSCLC
               |                             |
      +--------v----------+      +-----------v--------+
      |  Structured Store  |      |  Vector Store      |
-     |  PostgreSQL with   |      |  pgvector or       |
-     |  policy schema     |      |  Pinecone with     |
-     |                    |      |  PubMedBERT embeds  |
+     |  PostgreSQL 16 +   |      |  pgvector 0.8 HNSW |
+     |  policy schema     |      |  MedCPT / PubMed   |
+     |                    |      |  BERT embeddings    |
      +--------+----------+      +-----------+--------+
               |                             |
               +--------------+--------------+
@@ -869,16 +996,19 @@ Architecture for answering questions like "Which payers cover Keytruda for NSCLC
      +------------+  +-------------+  +-------------+
 ```
 
-### Technology Stack Recommendation
+### Technology Stack Recommendation (2026)
 
 | Layer | Technology | Rationale |
 |---|---|---|
-| Document parsing | Docling (primary) + Marker (OCR fallback) | Best accuracy, open source |
+| Document parsing | Docling v2.85 (primary) + Marker v1.10 (OCR fallback) | Best accuracy, broadest format support, MIT license |
+| HTML rendering | Docling Playwright backend (v2.82+) | Native headless browser for JS-rendered payer pages |
 | NER/NLP | scispaCy + Med7 + regex | Proven medical NER, no cloud dependency |
-| LLM extraction | AI SDK + Claude/GPT with structured output | Complex criteria, step therapy logic |
-| Drug normalization | RxNorm API + UMLS | Standard, free, comprehensive |
-| Database | PostgreSQL + pgvector | Single database for structured + vector |
-| Embeddings | PubMedBERT (768-dim) | Domain-specific accuracy |
-| Change detection | Document hash + JSON diff + semantic diff | Multi-level change tracking |
-| API framework | Next.js API routes or Hono | TypeScript, AI SDK integration |
-| Frontend | Next.js + React | Comparison views, search UI |
+| LLM extraction | AI SDK v4.x + Gemini 2.5 Pro/Flash with structured output | Native JSON schema, best cost/accuracy ratio |
+| LLM fallback | Claude Sonnet 4 via tool use | Excellent for ambiguous criteria, step therapy logic |
+| Drug normalization | RxNorm API + UMLS (API key required) | Standard, free, comprehensive |
+| Database | PostgreSQL 16 + pgvector 0.8 (HNSW) | Single database for structured + vector, parallel index builds |
+| Embeddings | MedCPT 768-dim (medical retrieval) or PubMedBERT 768-dim (similarity) | Domain-specific accuracy, matching pgvector index config |
+| Change detection | Document hash + JSON diff + semantic diff (cosine) | Multi-level change tracking |
+| API framework | Next.js 16 API routes + FastAPI (BFF) | TypeScript frontend, Python ML backend |
+| Frontend | Next.js 16 + React 19 | Comparison views, search UI |
+| FHIR compliance | Da Vinci PAS/CRD/DTR IGs on FHIR R4 | CMS-0057-F mandate (live since Jan 2026) |
