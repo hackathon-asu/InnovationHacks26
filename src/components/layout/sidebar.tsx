@@ -15,15 +15,15 @@ import {
 import { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
-const navItems: { href: string; label: string; icon: LucideIcon; disabled?: boolean }[] = [
+const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/drugs', label: 'Drug Search', icon: Pill },
   { href: '/compare', label: 'Compare Plans', icon: GitCompareArrows },
   { href: '/policies', label: 'Policies', icon: FileText },
   { href: '/changes', label: 'Changes', icon: History },
-  { href: '/chat', label: 'Ask AI (Demo)', icon: MessageSquare },
-  { href: '/upload', label: 'Upload (Disabled)', icon: Upload, disabled: true },
-  { href: '/fetch', label: 'Fetch (Disabled)', icon: LayoutDashboard, disabled: true },
+  { href: '/chat', label: 'Ask AI', icon: MessageSquare },
+  { href: '/upload', label: 'Upload', icon: Upload },
+  { href: '/fetch', label: 'Auto-Fetch', icon: LayoutDashboard },
   { href: '/api-docs', label: 'API Docs', icon: BookOpen },
 ];
 
@@ -40,9 +40,7 @@ function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () 
             href={item.href}
             onClick={onNavigate}
             className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-              item.disabled
-                ? 'text-muted-foreground/50 cursor-default'
-                : isActive
+              isActive
                 ? 'bg-primary/10 text-primary'
                 : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
             }`}

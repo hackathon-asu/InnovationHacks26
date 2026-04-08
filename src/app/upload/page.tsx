@@ -6,85 +6,72 @@
  * Commercial use: chatgpt@asu.edu
  * -------------------------------- */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState } from 'react';
 import { Dropzone } from '@/components/upload/dropzone';
+import { Toast, useToast } from '@/components/ui/toast';
 
 type Stage = { stage: string; status: string; message?: string | null };
-type PipelineStatus = {
-  policy_id: string;
-  overall_status: string;
-  progress_pct: number;
-  stages: Stage[];
-  error?: string | null;
-};
+
+const DISABLED_MSG = 'Uploads are disabled — API costs have been cut since the hackathon ended (effective April 7, 2026).';
 
 export default function UploadPage() {
   const [provider, setProvider] = useState<'gemini' | 'ollama' | 'groq' | 'nvidia' | 'anthropic'>('ollama');
-  const [uploading, setUploading] = useState(false);
-  const [policyId, setPolicyId] = useState<string | null>(null);
-  const [pipeline, setPipeline] = useState<PipelineStatus | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { toast, showToast } = useToast();
 
-  const stopPolling = useCallback(() => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-  }, []);
-
-  useEffect(() => () => stopPolling(), [stopPolling]);
-
-  function startPolling(id: string) {
-    stopPolling();
-    pollRef.current = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/policies/status/${id}`);
-        if (!res.ok) return;
-        const data: PipelineStatus = await res.json();
-        setPipeline(data);
-        if (data.overall_status === 'indexed' || data.overall_status === 'failed') {
-          stopPolling();
-        }
-      } catch { /* retry next tick */ }
-    }, 1500);
+  function handleUpload() {
+    showToast(DISABLED_MSG);
   }
-
-  async function handleUpload(file: File) {
-    setUploading(true);
-    setError(null);
-    setPipeline(null);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch(`/api/policies/upload?provider=${provider}`, { method: 'POST', body: formData });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Upload failed');
-      const id = data.policy_id;
-      setPolicyId(id);
-      startPolling(id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed');
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  const done = pipeline?.overall_status === 'indexed';
-  const failed = pipeline?.overall_status === 'failed';
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-8">
-      <div className="rounded-3xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 p-8 text-center">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 dark:bg-amber-500/20">
-          <svg className="h-7 w-7 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-          </svg>
+      <Toast {...toast} />
+      <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
+        {/* Left — Upload */}
+        <div className="rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#181A20] p-6 shadow-sm">
+          <div className="mb-5">
+            <h2 className="text-2xl font-semibold font-[var(--font-montserrat)] dark:text-white">Upload and ingest</h2>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Drop policy documents (PDF, DOCX, HTML, TXT) to extract drug rules and coverage criteria.</p>
+          </div>
+
+          {/* Model toggle */}
+          <div className="mb-5 flex items-center gap-3">
+            <span className="text-sm font-medium text-slate-600 dark:text-slate-400">LLM Provider:</span>
+            <div className="flex rounded-xl border border-slate-200 dark:border-white/10 bg-[#F0EDE8] dark:bg-white/5 p-0.5">
+              {(['gemini', 'anthropic', 'nvidia', 'groq', 'ollama'] as const).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setProvider(p)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                    provider === p
+                      ? 'bg-[#15173F] dark:bg-[#91BFEB] text-white dark:text-[#15173F] shadow-sm'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white'
+                  }`}
+                >
+                  {p === 'gemini' ? 'Gemini' : p === 'anthropic' ? 'Claude' : p === 'nvidia' ? 'NVIDIA' : p === 'groq' ? 'Groq' : 'Ollama'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Dropzone onUpload={handleUpload} isUploading={false} />
         </div>
-        <h2 className="text-2xl font-semibold font-[var(--font-montserrat)] text-amber-900 dark:text-amber-200">Uploads Disabled</h2>
-        <p className="mt-2 text-sm text-amber-700 dark:text-amber-300 max-w-md mx-auto">
-          Uploads have been disabled since the hackathon demo period has ended. This feature is no longer available to prevent API abuse.
-        </p>
-        <a href="/chat" className="mt-5 inline-block rounded-xl bg-[#15173F] dark:bg-[#91BFEB] px-5 py-2.5 text-sm font-semibold text-white dark:text-[#15173F] hover:opacity-90 transition-opacity">
-          Try the demo chat instead
-        </a>
+
+        {/* Right — Pipeline status */}
+        <div className="rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#181A20] p-6 shadow-sm">
+          <h3 className="text-xl font-semibold font-[var(--font-montserrat)] dark:text-white">AI ingestion pipeline</h3>
+
+          {/* Stage list */}
+          <div className="mt-5 space-y-3">
+            {defaultStages.map((s, i) => (
+              <div key={`${s.stage}-${i}`} className="flex items-center gap-3">
+                <StageIcon status={s.status} index={i + 1} />
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-slate-400 dark:text-slate-500">{s.stage}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </main>
   );

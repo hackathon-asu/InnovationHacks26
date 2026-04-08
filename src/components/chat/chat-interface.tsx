@@ -9,6 +9,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { MessageBubble } from './message-bubble';
+import { Toast, useToast } from '@/components/ui/toast';
 
 type Message = { id: string; role: 'user' | 'assistant'; content: string };
 type Provider = 'gemini' | 'ollama';
@@ -126,6 +127,7 @@ export function ChatInterface() {
   const [mounted, setMounted] = useState(false);
   const [input, setInput] = useState('');
   const [provider, setProvider] = useState<Provider>('gemini');
+  const { toast, showToast } = useToast();
 
   useEffect(() => { setMounted(true); }, []);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -190,16 +192,15 @@ export function ChatInterface() {
 
     // Live API disabled — hackathon demo period has ended
     setIsLoading(false);
-    setMessages((prev) => [
-      ...prev,
-      { id: assistantId, role: 'assistant', content: 'The live AI chat API has been disabled since the hackathon demo period has ended. You can still try the pre-built demo questions above to see how the system worked.' },
-    ]);
+    setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
+    showToast('Live AI chat is disabled — API costs have been cut since the hackathon ended (effective April 7, 2026). Try the demo questions above!');
   }
 
   const hasMessages = messages.length > 0;
 
   return (
     <div className="flex flex-1 flex-col min-h-screen bg-[#FAFBFD] dark:bg-[#0F1117]">
+        <Toast {...toast} />
         {/* Top bar */}
         <header className="flex items-center justify-between border-b border-slate-200 dark:border-white/10 bg-white dark:bg-[#181A20] px-6 py-3">
           <div className="flex items-center gap-3">
